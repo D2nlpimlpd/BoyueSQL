@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>连接数据库 - 本地智能体</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+    <!-- 左侧侧边栏 -->
+    <div class="sidebar">
+        <div class="logo">本地智能体</div>
+        <ul class="menu">
+            <li class="menu-item active">
+                <a href="/">连接数据库</a>
+            </li>
+            <li class="menu-item">
+                <a href="/qa">智能问答</a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 右侧主内容 -->
+    <div class="content">
+        <h2>数据库授权（Oracle 内网访问）</h2>
+        <p class="sub-title">您正在为本地智能体授权连接您的 Oracle 数据库</p>
+
+        <div class="status-line">
+            <span id="status-tag"
+                  class="status {{ 'connected' if connected else 'disconnected' }}">
+                {{ '已连接' if connected else '未连接' }}
+            </span>
+        </div>
+
+        <form id="conn-form" class="db-form">
+            <div class="form-item">
+                <label>IP/域名 <span class="required">*</span></label>
+                <input type="text" id="host"
+                       value="{{ default_config.DB_HOST }}"
+                       {{ 'readonly' if connected else '' }}>
+            </div>
+
+            <div class="form-item">
+                <label>端口号 <span class="required">*</span></label>
+                <input type="number" id="port"
+                       value="{{ default_config.DB_PORT }}"
+                       {{ 'readonly' if connected else '' }}>
+            </div>
+
+            <div class="form-item">
+                <label>服务名 (SERVICE_NAME) <span class="required">*</span></label>
+                <input type="text" id="service_name"
+                       value="{{ default_config.DB_SERVICE_NAME }}"
+                       {{ 'readonly' if connected else '' }}>
+            </div>
+
+            <div class="form-item">
+                <label>数据库用户名 <span class="required">*</span></label>
+                <input type="text" id="user"
+                       value="{{ default_config.DB_USER }}"
+                       {{ 'readonly' if connected else '' }}>
+            </div>
+
+            <div class="form-item">
+                <label>数据库密码 <span class="required">*</span></label>
+                <input type="password" id="password"
+                       value="{{ default_config.DB_PASSWORD }}">
+            </div>
+
+            <div class="form-actions">
+                {% if connected %}
+                    <button type="button" id="disconnect-btn"
+                            class="btn danger">断开连接</button>
+                    <button type="button" id="switch-btn"
+                            class="btn secondary">切换数据库</button>
+                {% else %}
+                    <button type="button" id="test-btn"
+                            class="btn secondary">测试连接</button>
+                    <button type="submit"
+                            class="btn primary">授权连接</button>
+                {% endif %}
+            </div>
+        </form>
+
+        <div id="result" class="result"></div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('conn-form');
+    const testBtn = document.getElementById('test-btn');
+    const resultDiv = document.getElementById('result');
+    const statusTag = document.getElementById('status-tag');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const switchBtn = document.getElementById('switch-btn');
+
+    async function sendConnect(testOnly) {
+        resultDiv.textContent = testOnly ? '正在测试连接...' : '正在连接数据库...';
+        resultDiv.className = 'result';
+
+        const payload = {
+            host: document.getElementById('host').value,
+            port: document.getElementById('port').value,
+            service_name: document.getElementById('service_name').value,
+            user: document.getElementById('user').value,
+            password: document.getElementById('password').value,
+            test_only: !!testOnly               // 关键：告诉后端是不是“仅测试”
+        };
+
+        try {
+            const resp = await fetch('/api/connect', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+
+            if (data.ok) {
+                if (testOnly) {
+                    // 仅测试：不刷新、不改成“已连接”，只提示“可以连接”
+                    resultDiv.textContent = '测试成功，可以连接到数据库，版本：' + data.version;
+                    resultDiv.className = 'result success';
+                } else {
+                    // 授权连接：真正建立会话，刷新让页面进入“已连接”状态
+                    resultDiv.textContent = '连接成功，数据库版本：' + data.version;
+                    resultDiv.className = 'result success';
+                    statusTag.textContent = '已连接';
+                    statusTag.className = 'status connected';
+                    location.reload();
+                }
+            } else {
+                resultDiv.textContent = (testOnly ? '测试失败：' : '连接失败：') +
+                    (data.error || '未知错误');
+                resultDiv.className = 'result error';
+                if (!testOnly) {
+                    statusTag.textContent = '未连接';
+                    statusTag.className = 'status disconnected';
+                }
+            }
+        } catch (e) {
+            resultDiv.textContent = '请求出错：' + e;
+            resultDiv.className = 'result error';
+            if (!testOnly) {
+                statusTag.textContent = '未连接';
+                statusTag.className = 'status disconnected';
+            }
+        }
+    }
+
+    async function sendDisconnect() {
+        try {
+            const resp = await fetch('/api/disconnect', {method: 'POST'});
+            const data = await resp.json();
+            if (data.ok) {
+                location.reload();
+            }
+        } catch (e) {
+            location.reload();
+        }
+    }
+
+    if (testBtn) {
+        testBtn.addEventListener('click', function () {
+            sendConnect(true);   // 测试
+        });
+    }
+
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', function () {
+            sendDisconnect();
+        });
+    }
+
+    if (switchBtn) {
+        switchBtn.addEventListener('click', function () {
+            sendDisconnect();
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            sendConnect(false);  // 真正授权连接
+        });
+    }
+</script>
+</body>
+</html>

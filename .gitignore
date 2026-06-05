@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+venv/
+env/
+ENV/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Runtime caches, logs, and generated indexes
+*.log
+*.err.log
+*.out.log
+cache/
+rag_cache/
+raganything_storage/
+*.faiss
+*.index
+*.sqlite
+*.db
+
+# Local artifacts
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.pdf
+*.ipynb
+build/
+dist/
+*.egg-info/
+
+# Oracle clients and local database tooling
+instantclient*/
+instantclient-*.zip
+F:/oracle/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

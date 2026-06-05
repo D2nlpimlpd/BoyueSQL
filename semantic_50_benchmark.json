@@ -1,0 +1,1583 @@
+{
+  "meta": {
+    "created_at": "2026-06-05 01:27:00",
+    "source": "live Oracle catalog + local database dictionary",
+    "single_count": 25,
+    "multi_count": 25
+  },
+  "cases": [
+    {
+      "id": "S01",
+      "query_type": "single",
+      "question": "从 统计总表表头（TONGJZB）表查询前10条记录，返回IS_CHINESE(IS_CHINESE)、TONGJIYUEFEN(TONGJIYUEFEN)、ADDCODE(ADDCODE)、人员类型(PERSON_TYPE)。",
+      "gold_sql": "SELECT IS_CHINESE, TONGJIYUEFEN, ADDCODE, PERSON_TYPE FROM TONGJZB WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "TONGJZB"
+      ],
+      "required_columns": [
+        "IS_CHINESE",
+        "TONGJIYUEFEN",
+        "ADDCODE",
+        "PERSON_TYPE"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "IS_CHINESE",
+        "TONGJIYUEFEN",
+        "ADDCODE",
+        "PERSON_TYPE"
+      ],
+      "gold_preview_rows": [
+        [
+          "2",
+          "00000000001114216685",
+          "2",
+          "38"
+        ],
+        [
+          "2",
+          "00000000001114216685",
+          "2",
+          "38"
+        ],
+        [
+          "2",
+          "00000000001114216685",
+          "2",
+          "33"
+        ],
+        [
+          "2",
+          "00000000000338049943",
+          "2",
+          "95"
+        ],
+        [
+          "2",
+          "00000000000338049943",
+          "2",
+          "38"
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "S02",
+      "query_type": "single",
+      "question": "在 统计总表表头（TONGJZB）表前5000条非空样本内，按TONGJIYUEFEN(TONGJIYUEFEN)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT TONGJIYUEFEN AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT TONGJIYUEFEN FROM TONGJZB WHERE TONGJIYUEFEN IS NOT NULL AND ROWNUM <= 5000) GROUP BY TONGJIYUEFEN ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "TONGJZB"
+      ],
+      "required_columns": [
+        "TONGJIYUEFEN"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000000338049943",
+          51
+        ],
+        [
+          "00000000001114216685",
+          46
+        ],
+        [
+          "00000000003755519745",
+          2
+        ],
+        [
+          "00000000004127425911",
+          1
+        ]
+      ],
+      "gold_row_count_preview": 4
+    },
+    {
+      "id": "S03",
+      "query_type": "single",
+      "question": "在 统计总表表头（TONGJZB）表前5000条非空样本内，统计FEIJIEHE(FEIJIEHE)的合计、平均值、最小值和最大值。",
+      "gold_sql": "SELECT SUM(FEIJIEHE) AS SUM_VALUE, AVG(FEIJIEHE) AS AVG_VALUE, MIN(FEIJIEHE) AS MIN_VALUE, MAX(FEIJIEHE) AS MAX_VALUE FROM (SELECT FEIJIEHE FROM TONGJZB WHERE FEIJIEHE IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "TONGJZB"
+      ],
+      "required_columns": [
+        "FEIJIEHE"
+      ],
+      "operation": "numeric_summary",
+      "gold_columns": [
+        "SUM_VALUE",
+        "AVG_VALUE",
+        "MIN_VALUE",
+        "MAX_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S04",
+      "query_type": "single",
+      "question": "从 CIQ 统计总表表头（TONGJZB_CIQ）表查询前10条记录，返回ADDCODE(ADDCODE)、IS_CHINESE(IS_CHINESE)、CIQCODE(CIQCODE)、CIQPERSON_TYPE(CIQPERSON_TYPE)。",
+      "gold_sql": "SELECT ADDCODE, IS_CHINESE, CIQCODE, CIQPERSON_TYPE FROM TONGJZB_CIQ WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "TONGJZB_CIQ"
+      ],
+      "required_columns": [
+        "ADDCODE",
+        "IS_CHINESE",
+        "CIQCODE",
+        "CIQPERSON_TYPE"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "ADDCODE",
+        "IS_CHINESE",
+        "CIQCODE",
+        "CIQPERSON_TYPE"
+      ],
+      "gold_preview_rows": [
+        [
+          "2",
+          "2",
+          "229",
+          "00000000000384600918"
+        ],
+        [
+          "2",
+          "2",
+          "202",
+          "00000000000454979092"
+        ],
+        [
+          "2",
+          "2",
+          "290",
+          "00000000003749605320"
+        ],
+        [
+          "2",
+          "2",
+          "202",
+          "00000000000454979092"
+        ],
+        [
+          "2",
+          "2",
+          "250",
+          "00000000002897928351"
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "S05",
+      "query_type": "single",
+      "question": "在 CIQ 统计总表表头（TONGJZB_CIQ）表前5000条非空样本内，按CIQCODE(CIQCODE)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT CIQCODE AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT CIQCODE FROM TONGJZB_CIQ WHERE CIQCODE IS NOT NULL AND ROWNUM <= 5000) GROUP BY CIQCODE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "TONGJZB_CIQ"
+      ],
+      "required_columns": [
+        "CIQCODE"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "134",
+          13
+        ],
+        [
+          "341",
+          13
+        ],
+        [
+          "120",
+          12
+        ],
+        [
+          "128",
+          10
+        ],
+        [
+          "169",
+          9
+        ]
+      ],
+      "gold_row_count_preview": 15
+    },
+    {
+      "id": "S06",
+      "query_type": "single",
+      "question": "在 CIQ 统计总表表头（TONGJZB_CIQ）表前5000条非空样本内，统计YFJZ_QITA(YFJZ_QITA)的合计、平均值、最小值和最大值。",
+      "gold_sql": "SELECT SUM(YFJZ_QITA) AS SUM_VALUE, AVG(YFJZ_QITA) AS AVG_VALUE, MIN(YFJZ_QITA) AS MIN_VALUE, MAX(YFJZ_QITA) AS MAX_VALUE FROM (SELECT YFJZ_QITA FROM TONGJZB_CIQ WHERE YFJZ_QITA IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "TONGJZB_CIQ"
+      ],
+      "required_columns": [
+        "YFJZ_QITA"
+      ],
+      "operation": "numeric_summary",
+      "gold_columns": [
+        "SUM_VALUE",
+        "AVG_VALUE",
+        "MIN_VALUE",
+        "MAX_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          2843867611,
+          2843867611,
+          2843867611,
+          2843867611
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S07",
+      "query_type": "single",
+      "question": "从 五官科检查（EXAM_EENT）表查询前10条记录，返回医生(EENT_PHYSICIAN)、部门(EENT_DEPT)、日期(EENT_DATE)、听力左(HEARING_L)。",
+      "gold_sql": "SELECT EENT_PHYSICIAN, EENT_DEPT, EENT_DATE, HEARING_L FROM EXAM_EENT WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT"
+      ],
+      "required_columns": [
+        "EENT_PHYSICIAN",
+        "EENT_DEPT",
+        "EENT_DATE",
+        "HEARING_L"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "EENT_PHYSICIAN",
+        "EENT_DEPT",
+        "EENT_DATE",
+        "HEARING_L"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "",
+          "2081-03-28 00:00:00",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "",
+          "2025-04-27 00:00:00",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "",
+          "2045-03-19 00:00:00",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "",
+          "2069-04-30 00:00:00",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "",
+          "2048-10-19 00:00:00",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "S08",
+      "query_type": "single",
+      "question": "在 五官科检查（EXAM_EENT）表前5000条非空样本内，按扁桃体中文(TONSILS)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT TONSILS AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT TONSILS FROM EXAM_EENT WHERE TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY TONSILS ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT"
+      ],
+      "required_columns": [
+        "TONSILS"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001462334014",
+          97
+        ],
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003613166870",
+          3
+        ]
+      ],
+      "gold_row_count_preview": 2
+    },
+    {
+      "id": "S09",
+      "query_type": "single",
+      "question": "在 五官科检查（EXAM_EENT）表前5000条非空样本内，统计身高(HEIGHT)的合计、平均值、最小值和最大值。",
+      "gold_sql": "SELECT SUM(HEIGHT) AS SUM_VALUE, AVG(HEIGHT) AS AVG_VALUE, MIN(HEIGHT) AS MIN_VALUE, MAX(HEIGHT) AS MAX_VALUE FROM (SELECT HEIGHT FROM EXAM_EENT WHERE HEIGHT IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT"
+      ],
+      "required_columns": [
+        "HEIGHT"
+      ],
+      "operation": "numeric_summary",
+      "gold_columns": [
+        "SUM_VALUE",
+        "AVG_VALUE",
+        "MIN_VALUE",
+        "MAX_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S10",
+      "query_type": "single",
+      "question": "在 五官科检查（EXAM_EENT）表前5000条非空样本内，统计日期(EENT_DATE)的最早日期、最晚日期和非空记录数。",
+      "gold_sql": "SELECT MIN(EENT_DATE) AS MIN_DATE, MAX(EENT_DATE) AS MAX_DATE, COUNT(*) AS CNT FROM (SELECT EENT_DATE FROM EXAM_EENT WHERE EENT_DATE IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT"
+      ],
+      "required_columns": [
+        "EENT_DATE"
+      ],
+      "operation": "date_summary",
+      "gold_columns": [
+        "MIN_DATE",
+        "MAX_DATE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "2001-02-21 00:00:00",
+          "2099-10-31 00:00:00",
+          100
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S11",
+      "query_type": "single",
+      "question": "从 试剂库存（SJ_KC）表查询前10条记录，返回是否打印(ISPRINTED)、有效期(SJPERIOD)、批号(SJBATCH)、规格(SJSPEC)。",
+      "gold_sql": "SELECT ISPRINTED, SJPERIOD, SJBATCH, SJSPEC FROM SJ_KC WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "SJ_KC"
+      ],
+      "required_columns": [
+        "ISPRINTED",
+        "SJPERIOD",
+        "SJBATCH",
+        "SJSPEC"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "ISPRINTED",
+        "SJPERIOD",
+        "SJBATCH",
+        "SJSPEC"
+      ],
+      "gold_preview_rows": [
+        [
+          "2",
+          "2056-03-08 00:00:00",
+          "00000000003520757475",
+          ""
+        ],
+        [
+          "2",
+          "2056-03-08 00:00:00",
+          "00000000003520757475",
+          ""
+        ],
+        [
+          "2",
+          "2020-05-15 00:00:00",
+          "00000000000870929130",
+          ""
+        ],
+        [
+          "2",
+          "2097-07-29 00:00:00",
+          "00000000002874791467",
+          ""
+        ],
+        [
+          "2",
+          "2097-07-29 00:00:00",
+          "00000000002874791467",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 5
+    },
+    {
+      "id": "S12",
+      "query_type": "single",
+      "question": "在 试剂库存（SJ_KC）表前5000条非空样本内，按批号(SJBATCH)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT SJBATCH AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT SJBATCH FROM SJ_KC WHERE SJBATCH IS NOT NULL AND ROWNUM <= 5000) GROUP BY SJBATCH ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "SJ_KC"
+      ],
+      "required_columns": [
+        "SJBATCH"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000002874791467",
+          2
+        ],
+        [
+          "00000000003520757475",
+          2
+        ],
+        [
+          "00000000000870929130",
+          1
+        ]
+      ],
+      "gold_row_count_preview": 3
+    },
+    {
+      "id": "S13",
+      "query_type": "single",
+      "question": "在 试剂库存（SJ_KC）表前5000条非空样本内，统计测试数量(SJUSENUM)的合计、平均值、最小值和最大值。",
+      "gold_sql": "SELECT SUM(SJUSENUM) AS SUM_VALUE, AVG(SJUSENUM) AS AVG_VALUE, MIN(SJUSENUM) AS MIN_VALUE, MAX(SJUSENUM) AS MAX_VALUE FROM (SELECT SJUSENUM FROM SJ_KC WHERE SJUSENUM IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "SJ_KC"
+      ],
+      "required_columns": [
+        "SJUSENUM"
+      ],
+      "operation": "numeric_summary",
+      "gold_columns": [
+        "SUM_VALUE",
+        "AVG_VALUE",
+        "MIN_VALUE",
+        "MAX_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          28842615,
+          9614205,
+          9614205,
+          9614205
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S14",
+      "query_type": "single",
+      "question": "在 试剂库存（SJ_KC）表前5000条非空样本内，统计有效期(SJPERIOD)的最早日期、最晚日期和非空记录数。",
+      "gold_sql": "SELECT MIN(SJPERIOD) AS MIN_DATE, MAX(SJPERIOD) AS MAX_DATE, COUNT(*) AS CNT FROM (SELECT SJPERIOD FROM SJ_KC WHERE SJPERIOD IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "SJ_KC"
+      ],
+      "required_columns": [
+        "SJPERIOD"
+      ],
+      "operation": "date_summary",
+      "gold_columns": [
+        "MIN_DATE",
+        "MAX_DATE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "2020-05-15 00:00:00",
+          "2097-07-29 00:00:00",
+          5
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S15",
+      "query_type": "single",
+      "question": "从 体检登记表（EXAM_RECORD）表查询前10条记录，返回取证类型(QUZHENG_TYPE)、主检建议(GENERAL_COMMENTS)、主检医生(GENERAL_DOCTOR)、实验室建议(LAB_COMMENTS)。",
+      "gold_sql": "SELECT QUZHENG_TYPE, GENERAL_COMMENTS, GENERAL_DOCTOR, LAB_COMMENTS FROM EXAM_RECORD WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "QUZHENG_TYPE",
+        "GENERAL_COMMENTS",
+        "GENERAL_DOCTOR",
+        "LAB_COMMENTS"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "QUZHENG_TYPE",
+        "GENERAL_COMMENTS",
+        "GENERAL_DOCTOR",
+        "LAB_COMMENTS"
+      ],
+      "gold_preview_rows": [
+        [
+          "",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001606694548",
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001606694548",
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001606694548",
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000272338508",
+          "00000000000000000000000000000000000000003650003469",
+          ""
+        ],
+        [
+          "",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001606694548",
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "S16",
+      "query_type": "single",
+      "question": "在 体检登记表（EXAM_RECORD）表前5000条非空样本内，按主检建议(GENERAL_COMMENTS)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT GENERAL_COMMENTS AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT GENERAL_COMMENTS FROM EXAM_RECORD WHERE GENERAL_COMMENTS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GENERAL_COMMENTS ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "GENERAL_COMMENTS"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001606694548",
+          69
+        ],
+        [
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001884990587",
+          9
+        ],
+        [
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002764031431",
+          4
+        ],
+        [
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002360777062",
+          2
+        ],
+        [
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046754802",
+          1
+        ]
+      ],
+      "gold_row_count_preview": 9
+    },
+    {
+      "id": "S17",
+      "query_type": "single",
+      "question": "在 体检登记表（EXAM_RECORD）表前5000条非空样本内，统计年龄(AGE)的合计、平均值、最小值和最大值。",
+      "gold_sql": "SELECT SUM(AGE) AS SUM_VALUE, AVG(AGE) AS AVG_VALUE, MIN(AGE) AS MIN_VALUE, MAX(AGE) AS MAX_VALUE FROM (SELECT AGE FROM EXAM_RECORD WHERE AGE IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "AGE"
+      ],
+      "operation": "numeric_summary",
+      "gold_columns": [
+        "SUM_VALUE",
+        "AVG_VALUE",
+        "MIN_VALUE",
+        "MAX_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          208623117496,
+          2086231174.96,
+          162863452,
+          4166253091
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S18",
+      "query_type": "single",
+      "question": "在 体检登记表（EXAM_RECORD）表前5000条非空样本内，统计发证日期(FAZHENG_DATE)的最早日期、最晚日期和非空记录数。",
+      "gold_sql": "SELECT MIN(FAZHENG_DATE) AS MIN_DATE, MAX(FAZHENG_DATE) AS MAX_DATE, COUNT(*) AS CNT FROM (SELECT FAZHENG_DATE FROM EXAM_RECORD WHERE FAZHENG_DATE IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "FAZHENG_DATE"
+      ],
+      "operation": "date_summary",
+      "gold_columns": [
+        "MIN_DATE",
+        "MAX_DATE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "2000-04-09 00:00:00",
+          "2099-09-21 00:00:00",
+          96
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S19",
+      "query_type": "single",
+      "question": "从 疫苗操作记录（YM_OPER）表查询前10条记录，返回操作人(OPERATOR)、操作原因(OPEREASON)、目的地(OPEPLACE)、疫苗编码(YMBM)。",
+      "gold_sql": "SELECT OPERATOR, OPEREASON, OPEPLACE, YMBM FROM YM_OPER WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "YM_OPER"
+      ],
+      "required_columns": [
+        "OPERATOR",
+        "OPEREASON",
+        "OPEPLACE",
+        "YMBM"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "OPERATOR",
+        "OPEREASON",
+        "OPEPLACE",
+        "YMBM"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000002161754848",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002803456133",
+          "",
+          "3161"
+        ],
+        [
+          "00000000002161754848",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002803456133",
+          "",
+          "2599"
+        ],
+        [
+          "00000000002161754848",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002132158815",
+          "",
+          "3161"
+        ],
+        [
+          "00000000002161754848",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002132158815",
+          "",
+          "2599"
+        ],
+        [
+          "00000000000109081814",
+          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000081123981",
+          "",
+          "2455"
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "S20",
+      "query_type": "single",
+      "question": "在 疫苗操作记录（YM_OPER）表前5000条非空样本内，按操作人(OPERATOR)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT OPERATOR AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT OPERATOR FROM YM_OPER WHERE OPERATOR IS NOT NULL AND ROWNUM <= 5000) GROUP BY OPERATOR ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "YM_OPER"
+      ],
+      "required_columns": [
+        "OPERATOR"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000002161754848",
+          86
+        ],
+        [
+          "00000000000109081814",
+          14
+        ]
+      ],
+      "gold_row_count_preview": 2
+    },
+    {
+      "id": "S21",
+      "query_type": "single",
+      "question": "在 疫苗操作记录（YM_OPER）表前5000条非空样本内，统计价格(OPERPRICE)的合计、平均值、最小值和最大值。",
+      "gold_sql": "SELECT SUM(OPERPRICE) AS SUM_VALUE, AVG(OPERPRICE) AS AVG_VALUE, MIN(OPERPRICE) AS MIN_VALUE, MAX(OPERPRICE) AS MAX_VALUE FROM (SELECT OPERPRICE FROM YM_OPER WHERE OPERPRICE IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "YM_OPER"
+      ],
+      "required_columns": [
+        "OPERPRICE"
+      ],
+      "operation": "numeric_summary",
+      "gold_columns": [
+        "SUM_VALUE",
+        "AVG_VALUE",
+        "MIN_VALUE",
+        "MAX_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          94151208.53,
+          23537802.1325,
+          12449553.66,
+          42772594.33
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S22",
+      "query_type": "single",
+      "question": "在 疫苗操作记录（YM_OPER）表前5000条非空样本内，统计操作日期(OPEDT)的最早日期、最晚日期和非空记录数。",
+      "gold_sql": "SELECT MIN(OPEDT) AS MIN_DATE, MAX(OPEDT) AS MAX_DATE, COUNT(*) AS CNT FROM (SELECT OPEDT FROM YM_OPER WHERE OPEDT IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "YM_OPER"
+      ],
+      "required_columns": [
+        "OPEDT"
+      ],
+      "operation": "date_summary",
+      "gold_columns": [
+        "MIN_DATE",
+        "MAX_DATE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "2001-09-04 00:00:00",
+          "2099-08-01 00:00:00",
+          100
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "S23",
+      "query_type": "single",
+      "question": "从 转卡记录（TRANSCRIBED_RECORD）表查询前10条记录，返回T_DATE7(T_DATE7)、T_DATE6(T_DATE6)、T_DATE5(T_DATE5)、T_DATE2(T_DATE2)。",
+      "gold_sql": "SELECT T_DATE7, T_DATE6, T_DATE5, T_DATE2 FROM TRANSCRIBED_RECORD WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "TRANSCRIBED_RECORD"
+      ],
+      "required_columns": [
+        "T_DATE7",
+        "T_DATE6",
+        "T_DATE5",
+        "T_DATE2"
+      ],
+      "operation": "list",
+      "gold_columns": [
+        "T_DATE7",
+        "T_DATE6",
+        "T_DATE5",
+        "T_DATE2"
+      ],
+      "gold_preview_rows": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "S24",
+      "query_type": "single",
+      "question": "在 转卡记录（TRANSCRIBED_RECORD）表前5000条非空样本内，按操作人(OPERATOR)分组统计记录数，按记录数降序返回。",
+      "gold_sql": "SELECT OPERATOR AS GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT OPERATOR FROM TRANSCRIBED_RECORD WHERE OPERATOR IS NOT NULL AND ROWNUM <= 5000) GROUP BY OPERATOR ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "TRANSCRIBED_RECORD"
+      ],
+      "required_columns": [
+        "OPERATOR"
+      ],
+      "operation": "group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000003077576449",
+          31
+        ],
+        [
+          "00000000000482107111",
+          19
+        ],
+        [
+          "00000000001649875683",
+          8
+        ],
+        [
+          "00000000002869308421",
+          4
+        ],
+        [
+          "00000000000550435704",
+          2
+        ]
+      ],
+      "gold_row_count_preview": 5
+    },
+    {
+      "id": "S25",
+      "query_type": "single",
+      "question": "在 转卡记录（TRANSCRIBED_RECORD）表前5000条非空样本内，统计T_DATE7(T_DATE7)的最早日期、最晚日期和非空记录数。",
+      "gold_sql": "SELECT MIN(T_DATE7) AS MIN_DATE, MAX(T_DATE7) AS MAX_DATE, COUNT(*) AS CNT FROM (SELECT T_DATE7 FROM TRANSCRIBED_RECORD WHERE T_DATE7 IS NOT NULL AND ROWNUM <= 5000)",
+      "selected_tables": [
+        "TRANSCRIBED_RECORD"
+      ],
+      "required_columns": [
+        "T_DATE7"
+      ],
+      "operation": "date_summary",
+      "gold_columns": [
+        "MIN_DATE",
+        "MAX_DATE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "2028-12-25 00:00:00",
+          "2051-08-03 00:00:00",
+          2
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M01",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 体检登记表（EXAM_RECORD），按 EXAM_EENT.EXAM_NO = EXAM_RECORD.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN EXAM_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          58
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M02",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_RECORD，使用 EXAM_EENT.EXAM_NO = EXAM_RECORD.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 取证类型(EXAM_RECORD.QUZHENG_TYPE)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.QUZHENG_TYPE AS RIGHT_VALUE FROM EXAM_EENT a JOIN EXAM_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "QUZHENG_TYPE"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          ""
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "M03",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_RECORD，按 EXAM_EENT.EXAM_NO = EXAM_RECORD.EXAM_NO，在前5000条匹配样本内，再按 EXAM_EENT 的扁桃体中文(TONSILS)分组统计匹配记录数。",
+      "gold_sql": "SELECT GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT a.TONSILS AS GROUP_VALUE FROM EXAM_EENT a JOIN EXAM_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS"
+      ],
+      "operation": "join_group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001462334014",
+          56
+        ],
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003613166870",
+          2
+        ]
+      ],
+      "gold_row_count_preview": 2
+    },
+    {
+      "id": "M04",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_RECORD，按 EXAM_EENT.EXAM_NO = EXAM_RECORD.EXAM_NO，在前5000条匹配样本内，按 EXAM_EENT.TONSILS 分组统计 EXAM_RECORD.AGE 的合计值。",
+      "gold_sql": "SELECT GROUP_VALUE, SUM(NUM_VALUE) AS SUM_VALUE FROM (SELECT a.TONSILS AS GROUP_VALUE, b.AGE AS NUM_VALUE FROM EXAM_EENT a JOIN EXAM_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND b.AGE IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY SUM_VALUE DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS",
+        "AGE"
+      ],
+      "operation": "join_group_sum",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "SUM_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001462334014",
+          128232796079
+        ],
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003613166870",
+          5473839329
+        ]
+      ],
+      "gold_row_count_preview": 2
+    },
+    {
+      "id": "M05",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 转卡记录（TRANSCRIBED_RECORD），按 EXAM_EENT.EXAM_NO = TRANSCRIBED_RECORD.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN TRANSCRIBED_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "TRANSCRIBED_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          0
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M06",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 TRANSCRIBED_RECORD，使用 EXAM_EENT.EXAM_NO = TRANSCRIBED_RECORD.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 T_DATE7(TRANSCRIBED_RECORD.T_DATE7)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.T_DATE7 AS RIGHT_VALUE FROM EXAM_EENT a JOIN TRANSCRIBED_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "TRANSCRIBED_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "T_DATE7"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M07",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 TRANSCRIBED_RECORD，按 EXAM_EENT.EXAM_NO = TRANSCRIBED_RECORD.EXAM_NO，在前5000条匹配样本内，再按 EXAM_EENT 的扁桃体中文(TONSILS)分组统计匹配记录数。",
+      "gold_sql": "SELECT GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT a.TONSILS AS GROUP_VALUE FROM EXAM_EENT a JOIN TRANSCRIBED_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "TRANSCRIBED_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS"
+      ],
+      "operation": "join_group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M08",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 内外科复查记录（EXAM_MS_BAK），按 EXAM_EENT.EXAM_NO = EXAM_MS_BAK.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN EXAM_MS_BAK b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_MS_BAK"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          0
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M09",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_MS_BAK，使用 EXAM_EENT.EXAM_NO = EXAM_MS_BAK.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 SCLERA(EXAM_MS_BAK.SCLERA)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.SCLERA AS RIGHT_VALUE FROM EXAM_EENT a JOIN EXAM_MS_BAK b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_MS_BAK"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "SCLERA"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M10",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_MS_BAK，按 EXAM_EENT.EXAM_NO = EXAM_MS_BAK.EXAM_NO，在前5000条匹配样本内，再按 EXAM_EENT 的扁桃体中文(TONSILS)分组统计匹配记录数。",
+      "gold_sql": "SELECT GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT a.TONSILS AS GROUP_VALUE FROM EXAM_EENT a JOIN EXAM_MS_BAK b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_MS_BAK"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS"
+      ],
+      "operation": "join_group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M11",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_MS_BAK，按 EXAM_EENT.EXAM_NO = EXAM_MS_BAK.EXAM_NO，在前5000条匹配样本内，按 EXAM_EENT.TONSILS 分组统计 EXAM_MS_BAK.PULSE_RATE 的合计值。",
+      "gold_sql": "SELECT GROUP_VALUE, SUM(NUM_VALUE) AS SUM_VALUE FROM (SELECT a.TONSILS AS GROUP_VALUE, b.PULSE_RATE AS NUM_VALUE FROM EXAM_EENT a JOIN EXAM_MS_BAK b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND b.PULSE_RATE IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY SUM_VALUE DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_MS_BAK"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS",
+        "PULSE_RATE"
+      ],
+      "operation": "join_group_sum",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "SUM_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M12",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 预防接种记录（EXAM_JZ_RECORD），按 EXAM_EENT.EXAM_NO = EXAM_JZ_RECORD.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN EXAM_JZ_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_JZ_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          0
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M13",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_JZ_RECORD，使用 EXAM_EENT.EXAM_NO = EXAM_JZ_RECORD.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 监管码(EXAM_JZ_RECORD.BARCODE)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.BARCODE AS RIGHT_VALUE FROM EXAM_EENT a JOIN EXAM_JZ_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_JZ_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "BARCODE"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M14",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_JZ_RECORD，按 EXAM_EENT.EXAM_NO = EXAM_JZ_RECORD.EXAM_NO，在前5000条匹配样本内，再按 EXAM_EENT 的扁桃体中文(TONSILS)分组统计匹配记录数。",
+      "gold_sql": "SELECT GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT a.TONSILS AS GROUP_VALUE FROM EXAM_EENT a JOIN EXAM_JZ_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_JZ_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS"
+      ],
+      "operation": "join_group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M15",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 EXAM_JZ_RECORD，按 EXAM_EENT.EXAM_NO = EXAM_JZ_RECORD.EXAM_NO，在前5000条匹配样本内，按 EXAM_EENT.TONSILS 分组统计 EXAM_JZ_RECORD.JZCS 的合计值。",
+      "gold_sql": "SELECT GROUP_VALUE, SUM(NUM_VALUE) AS SUM_VALUE FROM (SELECT a.TONSILS AS GROUP_VALUE, b.JZCS AS NUM_VALUE FROM EXAM_EENT a JOIN EXAM_JZ_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND b.JZCS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY SUM_VALUE DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "EXAM_JZ_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS",
+        "JZCS"
+      ],
+      "operation": "join_group_sum",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "SUM_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M16",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 采样记录（SAMPLE_STATUS），按 EXAM_EENT.EXAM_NO = SAMPLE_STATUS.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN SAMPLE_STATUS b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "SAMPLE_STATUS"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          24
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M17",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 SAMPLE_STATUS，使用 EXAM_EENT.EXAM_NO = SAMPLE_STATUS.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 血状态(SAMPLE_STATUS.XUE_STATUS)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.XUE_STATUS AS RIGHT_VALUE FROM EXAM_EENT a JOIN SAMPLE_STATUS b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "SAMPLE_STATUS"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "XUE_STATUS"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "2"
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "2"
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "2"
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "2"
+        ],
+        [
+          "00000000000000000000000000000000000000003369576201",
+          "2"
+        ]
+      ],
+      "gold_row_count_preview": 10
+    },
+    {
+      "id": "M18",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 SAMPLE_STATUS，按 EXAM_EENT.EXAM_NO = SAMPLE_STATUS.EXAM_NO，在前5000条匹配样本内，再按 EXAM_EENT 的扁桃体中文(TONSILS)分组统计匹配记录数。",
+      "gold_sql": "SELECT GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT a.TONSILS AS GROUP_VALUE FROM EXAM_EENT a JOIN SAMPLE_STATUS b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "SAMPLE_STATUS"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS"
+      ],
+      "operation": "join_group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001462334014",
+          24
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M19",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 SAMPLE_STATUS，按 EXAM_EENT.EXAM_NO = SAMPLE_STATUS.EXAM_NO，在前5000条匹配样本内，按 EXAM_EENT.TONSILS 分组统计 SAMPLE_STATUS.CHECKNO 的合计值。",
+      "gold_sql": "SELECT GROUP_VALUE, SUM(NUM_VALUE) AS SUM_VALUE FROM (SELECT a.TONSILS AS GROUP_VALUE, b.CHECKNO AS NUM_VALUE FROM EXAM_EENT a JOIN SAMPLE_STATUS b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND b.CHECKNO IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY SUM_VALUE DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "SAMPLE_STATUS"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS",
+        "CHECKNO"
+      ],
+      "operation": "join_group_sum",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "SUM_VALUE"
+      ],
+      "gold_preview_rows": [
+        [
+          "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001462334014",
+          25
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M20",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 审核费用明细（FEE_RECORD），按 EXAM_EENT.EXAM_NO = FEE_RECORD.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN FEE_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "FEE_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          0
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M21",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 FEE_RECORD，使用 EXAM_EENT.EXAM_NO = FEE_RECORD.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 收费项目编码(FEE_RECORD.FEE_ITEM)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.FEE_ITEM AS RIGHT_VALUE FROM EXAM_EENT a JOIN FEE_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "FEE_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "FEE_ITEM"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M22",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 FEE_RECORD，按 EXAM_EENT.EXAM_NO = FEE_RECORD.EXAM_NO，在前5000条匹配样本内，再按 EXAM_EENT 的扁桃体中文(TONSILS)分组统计匹配记录数。",
+      "gold_sql": "SELECT GROUP_VALUE, COUNT(*) AS CNT FROM (SELECT a.TONSILS AS GROUP_VALUE FROM EXAM_EENT a JOIN FEE_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "FEE_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS"
+      ],
+      "operation": "join_group_count",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "CNT"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M23",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 FEE_RECORD，按 EXAM_EENT.EXAM_NO = FEE_RECORD.EXAM_NO，在前5000条匹配样本内，按 EXAM_EENT.TONSILS 分组统计 FEE_RECORD.AMOUNT 的合计值。",
+      "gold_sql": "SELECT GROUP_VALUE, SUM(NUM_VALUE) AS SUM_VALUE FROM (SELECT a.TONSILS AS GROUP_VALUE, b.AMOUNT AS NUM_VALUE FROM EXAM_EENT a JOIN FEE_RECORD b ON a.EXAM_NO = b.EXAM_NO WHERE a.TONSILS IS NOT NULL AND b.AMOUNT IS NOT NULL AND ROWNUM <= 5000) GROUP BY GROUP_VALUE ORDER BY SUM_VALUE DESC, GROUP_VALUE",
+      "selected_tables": [
+        "EXAM_EENT",
+        "FEE_RECORD"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "TONSILS",
+        "AMOUNT"
+      ],
+      "operation": "join_group_sum",
+      "gold_columns": [
+        "GROUP_VALUE",
+        "SUM_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    },
+    {
+      "id": "M24",
+      "query_type": "multi",
+      "question": "关联 五官科检查（EXAM_EENT）和 票据打印清单（FEE_RECORD_PRINTLIST），按 EXAM_EENT.EXAM_NO = FEE_RECORD_PRINTLIST.EXAM_NO 统计前5000条匹配样本的记录总数。",
+      "gold_sql": "SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM EXAM_EENT a JOIN FEE_RECORD_PRINTLIST b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 5000)",
+      "selected_tables": [
+        "EXAM_EENT",
+        "FEE_RECORD_PRINTLIST"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO"
+      ],
+      "operation": "join_count",
+      "gold_columns": [
+        "CNT"
+      ],
+      "gold_preview_rows": [
+        [
+          0
+        ]
+      ],
+      "gold_row_count_preview": 1
+    },
+    {
+      "id": "M25",
+      "query_type": "multi",
+      "question": "关联 EXAM_EENT 和 FEE_RECORD_PRINTLIST，使用 EXAM_EENT.EXAM_NO = FEE_RECORD_PRINTLIST.EXAM_NO，返回前10条 医生(EXAM_EENT.EENT_PHYSICIAN) 和 票据号(FEE_RECORD_PRINTLIST.NOTE_NO)。",
+      "gold_sql": "SELECT a.EENT_PHYSICIAN AS LEFT_VALUE, b.NOTE_NO AS RIGHT_VALUE FROM EXAM_EENT a JOIN FEE_RECORD_PRINTLIST b ON a.EXAM_NO = b.EXAM_NO WHERE ROWNUM <= 10",
+      "selected_tables": [
+        "EXAM_EENT",
+        "FEE_RECORD_PRINTLIST"
+      ],
+      "required_columns": [
+        "EXAM_NO",
+        "EXAM_NO",
+        "EENT_PHYSICIAN",
+        "NOTE_NO"
+      ],
+      "operation": "join_list",
+      "gold_columns": [
+        "LEFT_VALUE",
+        "RIGHT_VALUE"
+      ],
+      "gold_preview_rows": [],
+      "gold_row_count_preview": 0
+    }
+  ]
+}

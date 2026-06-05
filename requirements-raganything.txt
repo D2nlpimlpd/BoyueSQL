@@ -1,0 +1,5 @@
+openpyxl>=3.1.5
+lightrag-hku==1.5.0
+raganything==1.3.1
+json-repair>=0.39.0
+pypinyin>=0.51.0

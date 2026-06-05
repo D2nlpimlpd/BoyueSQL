@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智能问答 - 本地智能体</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* ========== 🔥 布局宽度优化 ========== */
+        .layout {
+            max-width: none !important; /* 移除最大宽度限制 */
+        }
+
+        .content {
+            max-width: 1800px !important; /* 增加内容区域最大宽度 */
+            width: 100% !important;
+            padding: 30px 40px !important; /* 调整内边距 */
+        }
+
+        .sidebar {
+            min-width: 200px !important; /* 固定侧边栏宽度 */
+            max-width: 200px !important;
+        }
+
+        /* ========== 表单和输入框宽度优化 ========== */
+        .db-form {
+            max-width: none !important; /* 移除表单最大宽度限制 */
+        }
+
+        #question {
+            max-width: 100% !important;
+        }
+
+        /* ========== 标签页样式 ========== */
+        .tabs-container {
+            margin-top: 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .tabs-header {
+            display: flex;
+            background: #fafafa;
+            border-bottom: 2px solid #d9d9d9;
+            overflow-x: auto;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: color 0.2s, background-color 0.2s;
+            white-space: nowrap;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab-button:hover {
+            color: #1677ff;
+            background: #f0f0f0;
+        }
+
+        .tab-button.active {
+            color: #1677ff;
+            background: white;
+            border-bottom-color: #1677ff;
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tab-info {
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e8e8e8;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .tab-info strong {
+            color: #333;
+        }
+
+        .relation-info {
+            color: #1677ff;
+            margin-top: 4px;
+        }
+
+        /* ========== Excel 风格表格样式（优化版）========== */
+        .table-container {
+            position: relative;
+            background: white;
+        }
+
+        .table-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: #fafafa;
+            border-bottom: 1px solid #d9d9d9;
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .row-count {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .scroll-hint {
+            font-size: 12px;
+            color: #ff4d4f;
+            background: #fff2f0;
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #ffccc7;
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+
+        .page-size-selector select {
+            padding: 4px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .expand-btn {
+            background: #1677ff;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .expand-btn:hover {
+            background: #165fcb;
+        }
+
+        .table-wrapper {
+            overflow: auto;
+            max-height: 650px; /* 🔥 增加表格最大高度 */
+            /* 优化滚动性能 */
+            will-change: scroll-position;
+            -webkit-overflow-scrolling: touch;
+            position: relative;
+        }
+
+        .data-table {
+            width: max-content; /* 🔥 关键：让表格宽度自适应内容 */
+            min-width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: white;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #fafafa;
+        }
+
+        .data-table th {
+            background: #fafafa;
+            border: 1px solid #d9d9d9;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap; /* 🔥 列名不换行 */
+            min-width: 80px; /* 🔥 最小列宽 */
+            max-width: none; /* 🔥 移除最大宽度限制 */
+        }
+
+        .data-table td {
+            border: 1px solid #e8e8e8;
+            padding: 8px 12px;
+            color: #666;
+            white-space: nowrap; /* 🔥 单元格内容不换行 */
+            min-width: 80px; /* 🔥 最小列宽 */
+            max-width: 400px; /* 🔥 增大最大宽度 */
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 移除性能消耗大的 hover 效果（数据量大时） */
+        .data-table.large-dataset tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        /* 数据量小时保留 hover 效果 */
+        .data-table:not(.large-dataset) tbody tr:hover {
+            background-color: #f0f0f0;
+        }
+
+        .data-table:not(.large-dataset) tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .data-table:not(.large-dataset) tbody tr:nth-child(even):hover {
+            background-color: #e8e8e8;
+        }
+
+        /* ========== 分页控件 ========== */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            background: #fafafa;
+            border-top: 1px solid #d9d9d9;
+            flex-wrap: wrap;
+        }
+
+        .pagination button {
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            border-color: #1677ff;
+            color: #1677ff;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .page-info {
+            padding: 0 12px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .pagination .page-jump {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 12px;
+        }
+
+        .pagination .page-jump input {
+            width: 50px;
+            padding: 4px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        /* ========== 全屏模态框 ========== */
+        .fullscreen-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+        }
+
+        .fullscreen-modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .fullscreen-content {
+            background: white;
+            border-radius: 8px;
+            width: 95%;
+            height: 90%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fullscreen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #d9d9d9;
+            background: #fafafa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .fullscreen-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .close-btn {
+            background: #ff4d4f;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .close-btn:hover {
+            background: #ff7875;
+        }
+
+        .fullscreen-table-wrapper {
+            flex: 1;
+            overflow: auto;
+        }
+
+        /* ========== 滚动条样式 ========== */
+        .table-wrapper::-webkit-scrollbar,
+        .fullscreen-table-wrapper::-webkit-scrollbar,
+        .tabs-header::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        .table-wrapper::-webkit-scrollbar-track,
+        .fullscreen-table-wrapper::-webkit-scrollbar-track,
+        .tabs-header::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .table-wrapper::-webkit-scrollbar-thumb,
+        .fullscreen-table-wrapper::-webkit-scrollbar-thumb,
+        .tabs-header::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 6px;
+        }
+
+        .table-wrapper::-webkit-scrollbar-thumb:hover,
+        .fullscreen-table-wrapper::-webkit-scrollbar-thumb:hover,
+        .tabs-header::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* ========== 空结果提示 ========== */
+        .empty-result {
+            padding: 40px;
+            text-align: center;
+            color: #999;
+            background: #fafafa;
+        }
+
+        /* ========== 加载状态 ========== */
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1677ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+    <!-- 左侧侧边栏 -->
+    <div class="sidebar">
+        <div class="logo">本地智能体</div>
+        <ul class="menu">
+            <li class="menu-item">
+                <a href="/">连接数据库</a>
+            </li>
+            <li class="menu-item active">
+                <a href="/qa">智能问答</a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 右侧主内容 -->
+    <div class="content">
+        <h2>智能问答</h2>
+        <p class="sub-title">
+            面向当前已连接的 Oracle 数据库，使用本地智能体进行自然语言查询
+        </p>
+
+        {% if not connected %}
+            <p class="result error">
+                当前尚未连接数据库，请先在"连接数据库"页面完成授权。
+            </p>
+        {% else %}
+            <div class="db-form">
+                <div class="form-item">
+                    <label>请输入问题：</label>
+                    <textarea id="question" rows="4"
+                              style="width:100%;resize:vertical;"
+                              placeholder="例如：查询2020年所有检查记录&#10;或：检索EXAM_EENT表的所有数据"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" id="ask-btn"
+                            class="btn primary">发送问题</button>
+                </div>
+
+                <div id="qa-msg" class="result"></div>
+
+                <div class="form-item" id="sql-section" style="display:none;">
+                    <label>生成的 SQL：</label>
+                    <pre id="sql-box"
+                         style="background:#f5f5f5;padding:12px;border-radius:4px;white-space:pre-wrap;font-size:13px;border:1px solid #e8e8e8;"></pre>
+                </div>
+
+                <div class="form-item" id="result-section" style="display:none;">
+                    <label>查询结果：</label>
+                    <div id="tabs-container" class="tabs-container">
+                        <!-- 标签页将在这里动态生成 -->
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 全屏模态框 -->
+<div class="fullscreen-modal" id="fullscreenModal">
+    <div class="fullscreen-content">
+        <div class="fullscreen-header">
+            <h3 id="fullscreenTitle">📊 查询结果（全屏查看）</h3>
+            <button class="close-btn" id="closeBtn">关闭</button>
+        </div>
+        <div class="fullscreen-table-wrapper" id="fullscreenTableWrapper"></div>
+    </div>
+</div>
+
+{% if connected %}
+<script>
+    const askBtn = document.getElementById('ask-btn');
+    const qInput = document.getElementById('question');
+    const msgDiv = document.getElementById('qa-msg');
+    const sqlBox = document.getElementById('sql-box');
+    const sqlSection = document.getElementById('sql-section');
+    const resultSection = document.getElementById('result-section');
+    const tabsContainer = document.getElementById('tabs-container');
+    const fullscreenModal = document.getElementById('fullscreenModal');
+    const closeBtn = document.getElementById('closeBtn');
+    const fullscreenTableWrapper = document.getElementById('fullscreenTableWrapper');
+    const fullscreenTitle = document.getElementById('fullscreenTitle');
+
+    let allTablesData = {}; // 存储所有表的原始数据
+    let currentTabData = {}; // 当前标签页的分页数据
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // 🔥 创建分页表格（性能优化版）
+    function createPagedTable(tabId, columns, rows, pageSize = 100) {
+        const totalRows = rows.length;
+        const totalPages = Math.ceil(totalRows / pageSize);
+        let currentPage = 1;
+
+        // 保存分页数据
+        currentTabData[tabId] = {
+            columns: columns,
+            rows: rows,
+            pageSize: pageSize,
+            currentPage: currentPage,
+            totalPages: totalPages
+        };
+
+        return renderPage(tabId);
+    }
+
+    // 渲染当前页
+    function renderPage(tabId) {
+        const data = currentTabData[tabId];
+        if (!data) return '<div class="empty-result">数据加载失败</div>';
+
+        const { columns, rows, pageSize, currentPage, totalPages } = data;
+        const totalRows = rows.length;
+
+        if (totalRows === 0) {
+            return '<div class="empty-result">查询结果为空</div>';
+        }
+
+        // 计算当前页的数据范围
+        const startIdx = (currentPage - 1) * pageSize;
+        const endIdx = Math.min(startIdx + pageSize, totalRows);
+        const pageRows = rows.slice(startIdx, endIdx);
+
+        // 🔥 判断是否是大数据集（用于优化性能）
+        const isLargeDataset = totalRows > 1000;
+        const hasManyCols = columns.length > 20;
+
+        let html = '<div class="table-container">';
+        
+        // 工具栏
+        html += '<div class="table-toolbar">';
+        html += '<div class="toolbar-left">';
+        html += `<div class="row-count">共 ${totalRows} 行 × ${columns.length} 列</div>`;
+        
+        // 🔥 列数多时显示滚动提示
+        if (hasManyCols) {
+            html += '<div class="scroll-hint">⬅️ 横向滚动查看更多列 ➡️</div>';
+        }
+        
+        html += '<div class="page-size-selector">';
+        html += '<span>每页显示：</span>';
+        html += `<select onchange="changePageSize('${tabId}', this.value)">`;
+        html += `<option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>`;
+        html += `<option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>`;
+        html += `<option value="200" ${pageSize === 200 ? 'selected' : ''}>200</option>`;
+        
+        // 数据量不大时才显示"全部"选项
+        if (totalRows <= 2000) {
+            html += `<option value="500" ${pageSize === 500 ? 'selected' : ''}>500</option>`;
+            html += `<option value="${totalRows}" ${pageSize === totalRows ? 'selected' : ''}>全部</option>`;
+        }
+        
+        html += '</select>';
+        html += '</div></div>';
+        html += `<button class="expand-btn" onclick="openFullscreen('${tabId}')">🔍 全屏查看</button>`;
+        html += '</div>';
+        
+        // 🔥 表格（添加 large-dataset 类名以优化性能）
+        html += `<div class="table-wrapper"><table class="data-table ${isLargeDataset ? 'large-dataset' : ''}"><thead><tr>`;
+        for (const c of columns) {
+            html += `<th title="${escapeHtml(c)}">${escapeHtml(c)}</th>`;
+        }
+        html += '</tr></thead><tbody>';
+        
+        for (const r of pageRows) {
+            html += '<tr>';
+            for (const v of r) {
+                const displayValue = v === null || v === undefined ? '' : escapeHtml(String(v));
+                html += `<td title="${displayValue}">${displayValue}</td>`;
+            }
+            html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+
+        // 分页控件
+        if (totalPages > 1) {
+            html += '<div class="pagination">';
+            html += `<button onclick="goToPage('${tabId}', 1)" ${currentPage === 1 ? 'disabled' : ''}>首页</button>`;
+            html += `<button onclick="goToPage('${tabId}', ${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+            html += `<span class="page-info">第 ${currentPage} / ${totalPages} 页（显示 ${startIdx + 1}-${endIdx} 行）</span>`;
+            html += `<button onclick="goToPage('${tabId}', ${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+            html += `<button onclick="goToPage('${tabId}', ${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>末页</button>`;
+            html += '<div class="page-jump">';
+            html += '<span>跳转到</span>';
+            html += `<input type="number" id="pageInput_${tabId}" min="1" max="${totalPages}" value="${currentPage}">`;
+            html += `<button onclick="jumpToPage('${tabId}')">GO</button>`;
+            html += '</div></div>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    // 跳转到指定页
+    window.goToPage = function(tabId, page) {
+        const data = currentTabData[tabId];
+        if (!data) return;
+
+        data.currentPage = Math.max(1, Math.min(page, data.totalPages));
+        
+        // 重新渲染当前标签页
+        const tabContent = document.getElementById(tabId);
+        if (tabContent) {
+            const tableContainer = tabContent.querySelector('.table-container').parentElement;
+            tableContainer.innerHTML = renderPage(tabId);
+        }
+    };
+
+    // 改变每页显示数量
+    window.changePageSize = function(tabId, newSize) {
+        const data = currentTabData[tabId];
+        if (!data) return;
+
+        data.pageSize = parseInt(newSize);
+        data.totalPages = Math.ceil(data.rows.length / data.pageSize);
+        data.currentPage = 1; // 重置到第一页
+
+        // 重新渲染
+        const tabContent = document.getElementById(tabId);
+        if (tabContent) {
+            const tableContainer = tabContent.querySelector('.table-container').parentElement;
+            tableContainer.innerHTML = renderPage(tabId);
+        }
+    };
+
+    // 跳转到输入的页码
+    window.jumpToPage = function(tabId) {
+        const input = document.getElementById(`pageInput_${tabId}`);
+        if (!input) return;
+
+        const page = parseInt(input.value);
+        if (isNaN(page)) return;
+
+        goToPage(tabId, page);
+    };
+
+    // 🔥 懒加载渲染标签页（只渲染骨架，不渲染表格内容）
+    function renderTabs(data) {
+        console.log('收到的数据：', data);
+
+        // 清空容器
+        tabsContainer.innerHTML = '';
+        allTablesData = {};
+        currentTabData = {};
+
+        // 创建标签页结构
+        const tabsHeader = document.createElement('div');
+        tabsHeader.className = 'tabs-header';
+
+        const tabsBody = document.createElement('div');
+        tabsBody.className = 'tabs-body';
+
+        // 1. 主表标签页
+        const mainTable = data.main_table;
+        const mainTableId = 'tab-main';
+        const mainTableName = mainTable.name_cn || mainTable.name;
+
+        // 主表按钮
+        const mainTabBtn = document.createElement('button');
+        mainTabBtn.className = 'tab-button active';
+        mainTabBtn.textContent = `📊 主表：${mainTableName}`;
+        mainTabBtn.onclick = () => switchTab(mainTableId);
+        tabsHeader.appendChild(mainTabBtn);
+
+        // 主表内容（立即渲染）
+        const mainTabContent = document.createElement('div');
+        mainTabContent.id = mainTableId;
+        mainTabContent.className = 'tab-content active';
+
+        const mainInfo = document.createElement('div');
+        mainInfo.className = 'tab-info';
+        mainInfo.innerHTML = `
+            <div><strong>表名：</strong>${escapeHtml(mainTable.name)} ${mainTable.name_cn ? `（${escapeHtml(mainTable.name_cn)}）` : ''}</div>
+            <div><strong>数据量：</strong>${mainTable.rows.length} 行 × ${mainTable.columns.length} 列</div>
+        `;
+        mainTabContent.appendChild(mainInfo);
+
+        const mainTableContainer = document.createElement('div');
+        mainTableContainer.innerHTML = createPagedTable(mainTableId, mainTable.columns, mainTable.rows);
+        mainTabContent.appendChild(mainTableContainer);
+        tabsBody.appendChild(mainTabContent);
+
+        // 保存主表数据
+        allTablesData[mainTableId] = {
+            name: mainTableName,
+            columns: mainTable.columns,
+            rows: mainTable.rows
+        };
+
+        // 2. 编码表标签页（懒加载）
+        const codeTables = data.code_tables || {};
+        let codeTableIndex = 0;
+
+        for (const [codeTableName, codeTableData] of Object.entries(codeTables)) {
+            const tabId = `tab-code-${codeTableIndex}`;
+            const codeTableNameDisplay = codeTableData.table_cn || codeTableName;
+
+            // 编码表按钮
+            const codeTabBtn = document.createElement('button');
+            codeTabBtn.className = 'tab-button';
+            codeTabBtn.textContent = `📋 ${codeTableNameDisplay}`;
+            codeTabBtn.onclick = () => switchTab(tabId);
+            tabsHeader.appendChild(codeTabBtn);
+
+            // 编码表内容（只创建骨架，不渲染表格）
+            const codeTabContent = document.createElement('div');
+            codeTabContent.id = tabId;
+            codeTabContent.className = 'tab-content';
+            codeTabContent.dataset.loaded = 'false'; // 标记未加载
+
+            const codeInfo = document.createElement('div');
+            codeInfo.className = 'tab-info';
+            const relation = codeTableData.relation;
+            codeInfo.innerHTML = `
+                <div><strong>表名：</strong>${escapeHtml(codeTableName)} ${codeTableData.table_cn ? `（${escapeHtml(codeTableData.table_cn)}）` : ''}</div>
+                <div><strong>数据量：</strong>${codeTableData.rows.length} 行 × ${codeTableData.columns.length} 列</div>
+                <div class="relation-info"><strong>关联关系：</strong>${escapeHtml(relation.main_table)}.${escapeHtml(relation.main_column)} → ${escapeHtml(codeTableName)}.${escapeHtml(relation.code_column)}</div>
+            `;
+            codeTabContent.appendChild(codeInfo);
+
+            // 占位容器（懒加载时填充）
+            const placeholderDiv = document.createElement('div');
+            placeholderDiv.className = 'table-placeholder';
+            codeTabContent.appendChild(placeholderDiv);
+
+            tabsBody.appendChild(codeTabContent);
+
+            // 保存编码表数据
+            allTablesData[tabId] = {
+                name: codeTableNameDisplay,
+                columns: codeTableData.columns,
+                rows: codeTableData.rows
+            };
+
+            codeTableIndex++;
+        }
+
+        // 添加到容器
+        tabsContainer.appendChild(tabsHeader);
+        tabsContainer.appendChild(tabsBody);
+    }
+
+    // 🔥 切换标签页（懒加载内容）
+    function switchTab(tabId) {
+        // 移除所有 active 类
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        // 添加 active 类到点击的标签
+        const targetBtn = Array.from(document.querySelectorAll('.tab-button')).find(btn => 
+            btn.onclick && btn.onclick.toString().includes(tabId)
+        );
+        if (targetBtn) {
+            targetBtn.classList.add('active');
+        }
+
+        const targetContent = document.getElementById(tabId);
+        if (targetContent) {
+            targetContent.classList.add('active');
+
+            // 🔥 懒加载：如果该标签页未加载，则加载内容
+            if (targetContent.dataset.loaded === 'false') {
+                const tableData = allTablesData[tabId];
+                if (tableData) {
+                    const placeholder = targetContent.querySelector('.table-placeholder');
+                    if (placeholder) {
+                        placeholder.innerHTML = createPagedTable(tabId, tableData.columns, tableData.rows);
+                        targetContent.dataset.loaded = 'true';
+                    }
+                }
+            }
+        }
+    }
+
+    function openFullscreen(tabId) {
+        const tableData = allTablesData[tabId];
+        if (!tableData) return;
+
+        fullscreenTitle.textContent = `📊 ${tableData.name}（全屏查看）`;
+        
+        // 全屏也使用分页
+        fullscreenTableWrapper.innerHTML = createPagedTable('fullscreen-' + tabId, tableData.columns, tableData.rows, 200);
+        fullscreenModal.classList.add('show');
+    }
+
+    function closeFullscreen() {
+        fullscreenModal.classList.remove('show');
+    }
+
+    async function sendQuestion() {
+        const question = qInput.value.trim();
+        if (!question) {
+            msgDiv.textContent = '问题不能为空';
+            msgDiv.className = 'result error';
+            return;
+        }
+
+        // 显示加载状态
+        askBtn.disabled = true;
+        msgDiv.innerHTML = '<span class="loading-spinner"></span>正在请求本地智能体...';
+        msgDiv.className = 'result';
+        
+        // 隐藏之前的结果
+        sqlSection.style.display = 'none';
+        resultSection.style.display = 'none';
+        sqlBox.textContent = '';
+        tabsContainer.innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({question})
+            });
+            const data = await resp.json();
+
+            if (!data.ok) {
+                msgDiv.textContent = '出错：' + (data.error || '未知错误');
+                msgDiv.className = 'result error';
+                
+                // 如果有 SQL，仍然显示
+                if (data.sql) {
+                    sqlBox.textContent = data.sql;
+                    sqlSection.style.display = 'block';
+                }
+            } else {
+                msgDiv.textContent = '✓ 查询成功';
+                msgDiv.className = 'result success';
+                
+                // 显示 SQL
+                if (data.main_table && data.main_table.sql) {
+                    sqlBox.textContent = data.main_table.sql;
+                    sqlSection.style.display = 'block';
+                }
+                
+                // 渲染标签页
+                renderTabs(data);
+                resultSection.style.display = 'block';
+            }
+        } catch (e) {
+            msgDiv.textContent = '请求失败：' + e;
+            msgDiv.className = 'result error';
+        } finally {
+            askBtn.disabled = false;
+        }
+    }
+
+    // 事件监听
+    askBtn.addEventListener('click', sendQuestion);
+    
+    // 支持 Ctrl+Enter 发送
+    qInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            sendQuestion();
+        }
+    });
+
+    closeBtn.addEventListener('click', closeFullscreen);
+
+    // 点击背景关闭全屏
+    fullscreenModal.addEventListener('click', (e) => {
+        if (e.target === fullscreenModal) {
+            closeFullscreen();
+        }
+    });
+
+    // ESC 键关闭全屏
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && fullscreenModal.classList.contains('show')) {
+            closeFullscreen();
+        }
+    });
+</script>
+{% endif %}
+</body>
+</html>

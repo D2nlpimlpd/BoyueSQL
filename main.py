@@ -14,26 +14,44 @@ from pathlib import Path
 from decimal import Decimal
 import requests
 import re
+import hashlib
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from datetime import datetime, date
 import traceback
 import os
+import sys
 import time
 from typing import Dict, List, Tuple, Optional, Any, Set
 from collections import defaultdict
+from raganything_schema_retriever import RAGAnythingSchemaRetriever
+
+
+def _configure_console_encoding() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+_configure_console_encoding()
 
 # ============================================================
 # ① 基本配置（与你原来的基础环境配置完全一致，必须保留）
 # ============================================================
 app = Flask(__name__)
-app.secret_key = "replace_with_a_random_secret_key_yourself"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me")
 
 # Ollama
 OLLAMA_BASE_URL        = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_EMBEDDING_MODEL = os.environ.get("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
-OLLAMA_SQL_MODEL       = os.environ.get("OLLAMA_SQL_MODEL", "qwen2.5-coder:7b")
+OLLAMA_EMBEDDING_MODEL = os.environ.get("OLLAMA_EMBEDDING_MODEL", "qwen3-vl:8b")
+OLLAMA_SQL_MODEL       = os.environ.get("OLLAMA_SQL_MODEL", "qwen3-vl:8b")
+STRICT_QWEN3_VL_ONLY   = os.environ.get("STRICT_QWEN3_VL_ONLY", "1").lower() not in {"0", "false", "no"}
+DETERMINISTIC_EMBEDDING_DIM = int(os.environ.get("DETERMINISTIC_EMBEDDING_DIM", "1024"))
 
 # Oracle client
 ORACLE_CLIENT_DIR = os.environ.get("ORACLE_CLIENT_DIR", r"F:\oracle\instantclient_11_2")
@@ -47,7 +65,11 @@ DEFAULT_DB_CONFIG = {
 oracledb.init_oracle_client(lib_dir=ORACLE_CLIENT_DIR)
 
 # 系统参数
-DATA_DICT_PATH = Path(os.environ.get("DATA_DICT_PATH", "data_dictionary.json"))
+_DEFAULT_XLSX_DICT_PATH = Path("数据库字典结构.xlsx")
+DATA_DICT_PATH = Path(os.environ.get(
+    "DATA_DICT_PATH",
+    str(_DEFAULT_XLSX_DICT_PATH if _DEFAULT_XLSX_DICT_PATH.exists() else "data_dictionary.json"),
+))
 MAX_ROWS       = int(os.environ.get("MAX_ROWS", "500"))
 RAG_CACHE_DIR  = Path(os.environ.get("RAG_CACHE_DIR", "./rag_cache"))
 RAG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,9 +101,43 @@ _llm_semaphore = threading.Semaphore(1)
 _embedding_cache: Dict[str, np.ndarray] = {}
 _cache_lock = threading.Lock()
 
+
+def deterministic_schema_embed(texts: List[str], dim: int = DETERMINISTIC_EMBEDDING_DIM) -> np.ndarray:
+    """Non-model lexical hashing embedding used when qwen3-vl-only mode is required."""
+    rows = []
+    token_re = re.compile(r"[A-Za-z0-9_#$]+|[\u4e00-\u9fff]+")
+    for text in texts:
+        vec = np.zeros(dim, dtype=np.float32)
+        tokens = token_re.findall((text or "").upper())
+        if not tokens:
+            rows.append(vec)
+            continue
+        for token in tokens:
+            grams = [token]
+            if re.fullmatch(r"[\u4e00-\u9fff]+", token):
+                max_n = min(6, len(token))
+                for n in range(2, max_n + 1):
+                    grams.extend(token[i:i + n] for i in range(len(token) - n + 1))
+            elif len(token) > 3:
+                grams.extend(token[i:i + 3] for i in range(len(token) - 2))
+            for gram in grams:
+                digest = hashlib.blake2b(gram.encode("utf-8"), digest_size=8).digest()
+                bucket = int.from_bytes(digest[:4], "little") % dim
+                sign = 1.0 if (digest[4] & 1) == 0 else -1.0
+                vec[bucket] += sign
+        norm = float(np.linalg.norm(vec))
+        if norm > 0:
+            vec /= norm
+        rows.append(vec)
+    return np.vstack(rows).astype(np.float32) if rows else np.zeros((0, dim), dtype=np.float32)
+
+
 def ollama_embed(texts: List[str], batch_size: int = 100, show_progress: bool = False, use_cache: bool = True) -> np.ndarray:
     if not texts:
         return np.zeros((0, 0), dtype=np.float32)
+
+    if STRICT_QWEN3_VL_ONLY and OLLAMA_EMBEDDING_MODEL == "qwen3-vl:8b":
+        return deterministic_schema_embed(texts)
 
     vecs = []
     use_fallback = False
@@ -125,6 +181,8 @@ def ollama_embed(texts: List[str], batch_size: int = 100, show_progress: bool = 
                     _embedding_cache[text] = vec
             return (idx, vec)
         except Exception as e:
+            if STRICT_QWEN3_VL_ONLY:
+                return (idx, deterministic_schema_embed([text])[0])
             return (idx, None, str(e))
 
     max_workers = min(32, len(texts_to_process))
@@ -137,6 +195,10 @@ def ollama_embed(texts: List[str], batch_size: int = 100, show_progress: bool = 
 
             if len(result) == 3:
                 idx, _, error = result
+                if STRICT_QWEN3_VL_ONLY:
+                    _, text = futures[future]
+                    vecs.append((idx, deterministic_schema_embed([text])[0]))
+                    continue
                 if not use_fallback:
                     print(f"  [Embed warn] Ollama 失败: {error}，切换到 SentenceTransformer")
                     use_fallback = True
@@ -193,6 +255,17 @@ def ollama_chat(prompt: str,
                 timeout: int = 120,
                 num_ctx: int = 8192) -> str:          # ★ 新增 num_ctx 参数
     model = model or OLLAMA_SQL_MODEL
+    if model == "qwen3-vl:8b":
+        if "/no_think" not in prompt[:200]:
+            prompt = (
+                "/no_think\n"
+                "Do not output <think> or hidden reasoning. Output only the final answer requested.\n"
+                + prompt
+            )
+        max_tokens = max(
+            int(max_tokens),
+            int(os.environ.get("QWEN3_VL_MIN_NUM_PREDICT", "4096")),
+        )
     url   = f"{OLLAMA_BASE_URL}/api/generate"
     payload = {
         "model":  model,
@@ -204,12 +277,17 @@ def ollama_chat(prompt: str,
             "num_ctx":     num_ctx,
         }
     }
+    if model == "qwen3-vl:8b":
+        payload["think"] = False
     try:
         with _llm_semaphore:  # ★ 串行化：同时只允许1个 LLM 请求，防止 Ollama 过载
             resp = requests.post(url, json=payload, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
-        return data.get("response", "").strip()
+        text = data.get("response", "").strip()
+        if not text and model == "qwen3-vl:8b":
+            text = data.get("thinking", "").strip()
+        return text
     except requests.exceptions.ReadTimeout:
         print(f"  ⚠️ LLM 调用超时（>{timeout}s），返回空字符串")
         return ""
@@ -240,21 +318,115 @@ def _quote_chinese_aliases(sql: str) -> str:
     return sql
 
 
+def _strip_sql_tail(sql: str) -> str:
+    tail_markers = [
+        r"\s+在表结构中[:：]?",
+        r"\s+表结构中[:：]?",
+        r"\s+(?:说明|注意|解释|思路|步骤|但是|不过|此外|然而|因此|所以)[:：]?",
+        r"\s+(?:However|Note|But|Another|Explanation|Steps?|The\s+only|This\s+query)\b",
+    ]
+    for pattern in tail_markers:
+        sql = re.split(pattern, sql, maxsplit=1, flags=re.I | re.S)[0]
+    return sql.strip()
+
+
 def extract_sql(text: str) -> str:
     if not text:
         return ""
-    text = re.sub(r"```(?:sql|SQL)?", "", text).replace("```", "").strip()  
-    m = re.search(r"(SELECT\b.*?)(?:;|\Z)", text, flags=re.I | re.S)  
-    sql = m.group(1).strip() if m else ""  
-    if not sql:  
-        idx = text.upper().find("SELECT")  
-        sql = text[idx:].strip() if idx >= 0 else ""  
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.I | re.S).strip()
+    fenced = re.findall(r"```(?:sql|SQL)?\s*(.*?)```", text, flags=re.I | re.S)
+    candidates = fenced if fenced else [text]
+
+    sql = ""
+    for candidate in candidates:
+        candidate = candidate.strip()
+        starts = [m.start() for m in re.finditer(r"\b(?:SELECT\s+|WITH\b)", candidate, flags=re.I)]
+        for start in reversed(starts):
+            item = candidate[start:].strip()
+            if re.match(r"SELECT\s+[\u4e00-\u9fff]", item, flags=re.I):
+                continue
+            if ";" in item:
+                item = item.split(";", 1)[0]
+            item = _strip_sql_tail(item)
+            item = re.split(
+                r"\s+(?:但|不过|此外|现在|如果|因为|所以|需要|用户|表结构|知识图|之前|例如|这里|注意)",
+                item,
+                maxsplit=1,
+            )[0].strip()
+            if re.match(r"^(SELECT\s+|WITH\b)", item, flags=re.I) and re.search(r"\bFROM\b", item, flags=re.I):
+                sql = item
+                break
+        if sql:
+            break
     sql = sql.strip().rstrip(";")  
     sql = re.sub(r"--.*?$", "", sql, flags=re.M)  
     sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)  
+    sql = re.sub(
+        r"\s+-\s+(?=(FROM|JOIN|WHERE|GROUP\s+BY|HAVING|ORDER\s+BY)\b)",
+        " ",
+        sql,
+        flags=re.I,
+    )
     sql = re.sub(r"\s+", " ", sql).strip()  
     sql = _quote_chinese_aliases(sql)  # ★ 修复：Oracle 中文别名必须加双引号
     return sql  
+
+
+def validate_sql_against_dictionary(sql: str, allowed_tables: Optional[List[str]] = None) -> Tuple[bool, str]:
+    if not sql:
+        return False, "SQL is empty"
+
+    allowed = {t.upper() for t in (allowed_tables or []) if t}
+    alias_to_table: Dict[str, str] = {}
+    used_tables: Set[str] = set()
+
+    from_match = re.search(
+        r"\bFROM\b\s+(.+?)(?=\bWHERE\b|\bGROUP\s+BY\b|\bORDER\s+BY\b|\bHAVING\b|\bUNION\b|\Z)",
+        sql,
+        flags=re.I | re.S,
+    )
+    if from_match:
+        from_part = re.sub(r"\b(LEFT|RIGHT|FULL|INNER|OUTER|CROSS)\s+JOIN\b", " JOIN ", from_match.group(1), flags=re.I)
+        pieces = re.split(r"\bJOIN\b|,", from_part, flags=re.I)
+        for piece in pieces:
+            piece = re.split(r"\bON\b", piece, flags=re.I)[0].strip()
+            if not piece or piece.startswith("("):
+                continue
+            match = re.match(
+                r"([A-Z0-9_#$]+)(?:\s+(?:AS\s+)?([A-Z][A-Z0-9_#$]*))?",
+                piece,
+                flags=re.I,
+            )
+            if not match:
+                continue
+            table = match.group(1).upper()
+            alias = (match.group(2) or table).upper()
+            if table in {"SELECT", "WHERE", "GROUP", "ORDER", "ON"}:
+                continue
+            used_tables.add(table)
+            alias_to_table[alias] = table
+            alias_to_table[table] = table
+
+    for table in used_tables:
+        if get_table_info(table) is None:
+            return False, f"table {table} is not in the database dictionary"
+        if allowed and table not in allowed:
+            return False, f"table {table} is not in retrieved allowed tables"
+
+    for alias, column in re.findall(r"\b([A-Z][A-Z0-9_#$]*)\.([A-Z][A-Z0-9_#$]*)\b", sql, flags=re.I):
+        alias_u = alias.upper()
+        column_u = column.upper()
+        table = alias_to_table.get(alias_u)
+        if not table:
+            continue
+        live_columns = get_live_table_column_names(table)
+        if live_columns == set():
+            return False, f"table {table} does not exist in live database"
+        table_columns = live_columns if live_columns is not None else set(get_table_columns(table).keys())
+        if column_u not in table_columns:
+            return False, f"column {alias_u}.{column_u} is not in table {table}"
+
+    return True, ""
 
 
 # ============================================================  
@@ -323,8 +495,39 @@ def run_sql(sql: str, max_rows: int = MAX_ROWS, timeout: int = 60) -> Tuple[List
 # ============================================================  
 def load_data_dictionary() -> Dict[str, Any]:  
     print(f"📖 正在加载数据字典：{DATA_DICT_PATH}")  
-    with open(DATA_DICT_PATH, "r", encoding="utf-8") as f:  
-        dd = json.load(f)  
+    if DATA_DICT_PATH.suffix.lower() in {".xlsx", ".xlsm"}:
+        try:
+            import importlib.util
+
+            adapter_path = (
+                Path(__file__).resolve().parent
+                / "third_party"
+                / "raganything-1.3.1"
+                / "raganything"
+                / "sql_dictionary.py"
+            )
+            spec = importlib.util.spec_from_file_location(
+                "coordsql_raganything_sql_dictionary", adapter_path
+            )
+            if spec is None or spec.loader is None:
+                raise RuntimeError(f"Cannot load dictionary adapter from {adapter_path}")
+            adapter = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(adapter)
+            dd = adapter.load_database_dictionary_excel(DATA_DICT_PATH)
+        except Exception as exc:
+            json_fallback = Path("data_dictionary.json")
+            if "DATA_DICT_PATH" not in os.environ and json_fallback.exists():
+                print(
+                    f"⚠️ Excel 数据字典加载失败，临时回退到 {json_fallback}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                with open(json_fallback, "r", encoding="utf-8") as f:
+                    dd = json.load(f)
+            else:
+                raise
+    else:
+        with open(DATA_DICT_PATH, "r", encoding="utf-8") as f:  
+            dd = json.load(f)  
     print("✅ 数据字典加载成功")  
     print(f"  - 主表数量：{len(dd.get('main_tables', {}))}")  
     print(f"  - 编码表数量：{len(dd.get('code_tables', {}))}")  
@@ -367,6 +570,33 @@ def get_table_columns(table: str) -> Dict[str, Dict[str, Any]]:
                 if n:  
                     result[n] = c  
     return result  
+
+
+_live_columns_cache: Dict[str, Optional[Set[str]]] = {}
+
+
+def get_live_table_column_names(table: str) -> Optional[Set[str]]:
+    table_u = (table or "").upper()
+    if not table_u:
+        return None
+    if table_u in _live_columns_cache:
+        return _live_columns_cache[table_u]
+    try:
+        conn = get_conn_from_session()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = :table_name",
+                {"table_name": table_u},
+            )
+            cols = {str(row[0]).upper() for row in cur.fetchall() if row and row[0]}
+            _live_columns_cache[table_u] = cols
+            return _live_columns_cache[table_u]
+        finally:
+            conn.close()
+    except Exception:
+        _live_columns_cache[table_u] = None
+        return None
 
 
 def is_code_table(table: str) -> bool:  
@@ -740,7 +970,16 @@ class MultiGranularitySchemaIndex:
         return tables, cols, rels
 
 
-SCHEMA_INDEX = MultiGranularitySchemaIndex(DATA_DICT)
+_FAISS_SCHEMA_INDEX = MultiGranularitySchemaIndex(DATA_DICT)
+SCHEMA_INDEX = RAGAnythingSchemaRetriever(
+    data_dict=DATA_DICT,
+    embed_func=ollama_embed,
+    chat_func=ollama_chat,
+    fallback_index=_FAISS_SCHEMA_INDEX,
+    dictionary_path=DATA_DICT_PATH,
+    working_dir=Path(os.environ.get("RAGANYTHING_WORKING_DIR", "./raganything_storage")),
+    enabled=os.environ.get("USE_RAGANYTHING", "1").lower() not in {"0", "false", "no"},
+)
 SCHEMA_INDEX.build_or_load()
 
 
@@ -765,6 +1004,15 @@ def schema_text_for_tables(tables: List[str], max_cols_each: int = 35) -> str:
         elif isinstance(cols, dict):
             col_list = [c for _, c in cols.items() if isinstance(c, dict)]
 
+        live_cols = get_live_table_column_names(t)
+        if live_cols == set():
+            continue
+        if live_cols is not None:
+            col_list = [
+                c for c in col_list
+                if (c.get("name") or "").upper() in live_cols
+            ]
+
         shown = 0
         for c in col_list:
             if shown >= max_cols_each:
@@ -776,6 +1024,18 @@ def schema_text_for_tables(tables: List[str], max_cols_each: int = 35) -> str:
             lines.append(f"  - {name} ({cn}) [{ts}]")
             shown += 1
     return "\n".join(lines)
+
+
+def schema_kg_context_for_prompt(retrieve: Dict[str, Any], max_chars: int = 3000) -> str:
+    context = (retrieve.get("rag_context") or "").strip()
+    if not context:
+        return ""
+    context = context[:max_chars]
+    return (
+        "\n\n[RAGAnything LightRAG knowledge-graph context]\n"
+        "Use these retrieved schema markers as evidence. Keep exact table/column names.\n"
+        f"{context}\n"
+    )
 
 
 # ★ 新增：生成 JOIN 关系提示文本（把 RAG 检索到的关系传给 LLM）
@@ -812,26 +1072,69 @@ def retrieve_schema(question: str,
                     user_selected_tables: Optional[List[str]] = None) -> Dict[str, Any]:
     tables_hits, cols_hits, rels_hits = SCHEMA_INDEX.search(question)
 
-    cand_tables: List[str] = []
+    table_scores: Dict[str, float] = defaultdict(float)
+    evidence_order: List[str] = []
+
+    def add_table_score(table: str, score: float) -> None:
+        table = (table or "").upper()
+        if not table or get_table_info(table) is None:
+            return
+        if get_live_table_column_names(table) == set():
+            return
+        if table not in table_scores:
+            evidence_order.append(table)
+        table_scores[table] += float(score)
+
     if user_selected_tables:
-        cand_tables.extend([t.upper() for t in user_selected_tables if t])
-    else:
-        cand_tables.extend([h[1]["table"] for h in tables_hits])
+        for t in user_selected_tables:
+            add_table_score(t, 100.0)
 
-    for _, ent in cols_hits:
-        cand_tables.append(ent["table"])
-    for _, ent in rels_hits:
-        cand_tables.append(ent["left"])
-        cand_tables.append(ent["right"])
+    for score, ent in tables_hits:
+        add_table_score(ent.get("table"), max(float(score), 0.0))
 
-    uniq, seen = [], set()
-    for t in cand_tables:
-        tu = t.upper()
-        if tu in seen or get_table_info(tu) is None:
+    for score, ent in cols_hits:
+        add_table_score(ent.get("table"), max(float(score), 0.0) * 1.2)
+
+    for score, ent in rels_hits:
+        add_table_score(ent.get("left"), max(float(score), 0.0) * 0.6)
+        add_table_score(ent.get("right"), max(float(score), 0.0) * 0.6)
+
+    order_index = {table: idx for idx, table in enumerate(evidence_order)}
+    ranked_tables = sorted(
+        table_scores,
+        key=lambda table: (
+            table_scores[table],
+            0 if not is_code_table(table) else -1,
+            -order_index.get(table, 0),
+        ),
+        reverse=True,
+    )
+    base_limit = int(os.environ.get("SCHEMA_CANDIDATE_TABLE_LIMIT", "14"))
+    final_limit = int(os.environ.get("SCHEMA_CANDIDATE_TABLE_FINAL_LIMIT", "16"))
+    relation_expand_limit = int(os.environ.get("SCHEMA_RELATION_EXPAND_LIMIT", "2"))
+
+    uniq = ranked_tables[:base_limit]
+    seen = set(uniq)
+
+    expanded_by_relation = 0
+    for _score, rel in rels_hits:
+        left = (rel.get("left") or "").upper()
+        right = (rel.get("right") or "").upper()
+        if not left or not right:
             continue
-        seen.add(tu)
-        uniq.append(tu)
-    uniq = uniq[:12]
+        if is_code_table(left) == is_code_table(right):
+            continue
+        if left in seen and right not in seen and get_table_info(right) is not None and get_live_table_column_names(right) != set():
+            uniq.append(right)
+            seen.add(right)
+        elif right in seen and left not in seen and get_table_info(left) is not None and get_live_table_column_names(left) != set():
+            uniq.append(left)
+            seen.add(left)
+        else:
+            continue
+        expanded_by_relation += 1
+        if expanded_by_relation >= relation_expand_limit or len(uniq) >= final_limit:
+            break
 
     need_name = any(k in question for k in [
         "名称", "名字", "中文", "含义", "描述", "字典", "对应", "显示",
@@ -840,10 +1143,10 @@ def retrieve_schema(question: str,
     if need_name:
         extra = expand_with_code_tables(uniq)
         for t in extra:
-            if t not in seen:
+            if t not in seen and get_live_table_column_names(t) != set():
                 uniq.append(t)
                 seen.add(t)
-        uniq = uniq[:16]
+        uniq = uniq[:final_limit]
 
     return {
         "tables_hits":      tables_hits,
@@ -851,6 +1154,9 @@ def retrieve_schema(question: str,
         "rels_hits":        rels_hits,       # ★ 新增：把关系检索结果也传出去
         "candidate_tables": uniq,
         "need_name":        need_name,
+        "rag_backend":      getattr(SCHEMA_INDEX, "backend_name", "unknown"),
+        "rag_context":      getattr(SCHEMA_INDEX, "last_context", ""),
+        "rag_error":        getattr(SCHEMA_INDEX, "last_error", ""),
     }
 
 
@@ -867,6 +1173,9 @@ def make_plan(question: str, start_date: str, end_date: str,
     # 只提取表名，不传任何列信息
     table_names = re.findall(r'TABLE\s+(\w+)', schema_ctx)
     table_list  = "、".join(table_names) if table_names else "（见Schema）"
+
+    if OLLAMA_SQL_MODEL == "qwen3-vl:8b" and os.environ.get("QWEN3_VL_SKIP_LLM_PLAN", "1").lower() not in {"0", "false", "no"}:
+        return _empty_plan("qwen3_vl_deterministic_empty_plan")
 
     prompt = (
         f"从以下表中选出回答用户问题最需要的1~4张表，只输出JSON。\n"
@@ -982,44 +1291,13 @@ def generate_multi_sql(question: str, start_date: str, end_date: str,
     if "ISNORMAL" in all_cols:
         business_hint += "- ISNORMAL = '1' 表示结果正常，'0' 表示结果异常\n"
 
-    # ★ 新增：当问题涉及中外人员+检验结果时，强制提示使用正确的视图
-    q_lower = question.lower()
-    if any(kw in question for kw in ["中外", "中国籍", "外籍", "国籍", "ISCHINNESE"]) and \
-       any(kw in question for kw in ["检验", "实验室", "化验", "LAB"]):
-        business_hint += (
-            "\n【重要业务提示】本查询涉及中外人员检验结果统计，请优先使用视图 V_EXAM_RECORD_LAB_RESULT，"
-            "该视图已包含 ISCHINNESE（国籍）、ITEM_CODE（检验项目）、ISNORMAL（是否正常）、LAB_DATE（检验日期）字段，"
-            "可直接关联 AA_BM_MEDICAL_CLINICITEM 获取项目名称。"
-            "注意：T_BASEINFO_FOR_KODAK 表不存在，不要使用它。\n"
-        )
     business_sec = (
         f"\n业务字段说明（字段存在时才使用）：\n{business_hint}"
         if business_hint else ""
     )
 
-    # ★ 新增：few-shot 多表 JOIN 示例
-    few_shot = """
-【Oracle多表JOIN写法示例（参考格式）】
--- 示例1：两表关联 + 分组统计
-SELECT a.DEPT_CODE, b.DEPT_NAME, COUNT(*) AS CNT
-FROM EXAM_RECORD a, AA_BM_MEDICAL_DEPT b
-WHERE a.DEPT_CODE = b.DEPT_CODE
-  AND a.EXAM_DATE >= TO_DATE('2021-01-01','YYYY-MM-DD')
-  AND a.EXAM_DATE <= TO_DATE('2021-12-31','YYYY-MM-DD')
-GROUP BY a.DEPT_CODE, b.DEPT_NAME
-
--- 示例2：中外人员检验异常统计（使用V_EXAM_RECORD_LAB_RESULT视图）
-SELECT a.ITEM_CODE AS "检验项目编号", b.ITEM_NAME AS "检验项目名称",
-       SUM(CASE WHEN a.ISCHINNESE='1' THEN 1 ELSE 0 END) AS "中国籍受检总人数",
-       SUM(CASE WHEN a.ISCHINNESE='1' AND a.ISNORMAL='0' THEN 1 ELSE 0 END) AS "中国籍异常/阳性人数",
-       SUM(CASE WHEN a.ISCHINNESE='0' THEN 1 ELSE 0 END) AS "外籍受检总人数",
-       SUM(CASE WHEN a.ISCHINNESE='0' AND a.ISNORMAL='0' THEN 1 ELSE 0 END) AS "外籍异常/阳性人数"
-FROM V_EXAM_RECORD_LAB_RESULT a
-JOIN AA_BM_MEDICAL_CLINICITEM b ON a.ITEM_CODE = b.ITEM_CODE
-WHERE a.LAB_DATE >= TO_DATE('2021-01-01','YYYY-MM-DD')
-  AND a.LAB_DATE <= TO_DATE('2026-03-17','YYYY-MM-DD')
-GROUP BY a.ITEM_CODE, b.ITEM_NAME
-"""
+    # Fixed SQL examples can be copied by qwen3-vl and hurt generalization.
+    few_shot = ""
 
     prompt = f"""你是 Oracle 11g SQL 专家（只写 SELECT 语句）。
 根据用户问题、查询计划和表结构，生成正确的多表关联查询 SQL。
@@ -1057,6 +1335,398 @@ SQL 规范：
     except Exception as e:
         print(f"  ❌ LLM 调用失败: {e}")
         return ""
+
+
+def _fallback_query_terms(text: str) -> Set[str]:
+    terms = {m.group(0).lower() for m in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*", text or "")}
+    for segment in re.findall(r"[\u4e00-\u9fff]+", text or ""):
+        terms.add(segment)
+        for n in range(2, min(8, len(segment)) + 1):
+            for i in range(0, len(segment) - n + 1):
+                terms.add(segment[i : i + n])
+    return terms
+
+
+def _fallback_requested_labels(question: str) -> List[str]:
+    q = question or ""
+    if "包括" in q:
+        target = q.split("包括", 1)[1]
+    elif "包含" in q:
+        target = q.split("包含", 1)[1]
+    elif "需要" in q:
+        target = q.split("需要", 1)[1]
+    else:
+        target = q
+    labels: List[str] = []
+    for part in re.split(r"[、,，；;。\s]+|以及|和|及", target):
+        label = part.strip(" ：:()（）")
+        if 2 <= len(label) <= 12 and re.search(r"[\u4e00-\u9fff]", label):
+            if not any(x in label for x in ["关联", "按照", "期间", "每个"]):
+                labels.append(label)
+    out: List[str] = []
+    seen: Set[str] = set()
+    for label in labels:
+        if label not in seen:
+            out.append(label)
+            seen.add(label)
+    return out[:12]
+
+
+def _table_has_column(table: str, column: str) -> bool:
+    table_u = (table or "").upper()
+    column_u = (column or "").upper()
+    live = get_live_table_column_names(table_u)
+    if live is not None:
+        return column_u in live
+    return column_u in get_table_columns(table_u)
+
+
+def _explicit_query_limit(question: str, default: int) -> int:
+    m = re.search(r"前\s*(\d+)\s*条", question or "")
+    if not m:
+        return default
+    try:
+        return max(1, min(int(m.group(1)), 5000))
+    except Exception:
+        return default
+
+
+def _explicit_tables_in_question(question: str, allowed_tables: List[str]) -> List[str]:
+    q_upper = (question or "").upper()
+    pool = {str(t).upper() for t in allowed_tables or [] if get_table_info(str(t))}
+    pool.update(str(t).upper() for t in DATA_DICT.keys())
+    hits: List[Tuple[int, int, str]] = []
+    for table in pool:
+        if not table:
+            continue
+        paren = re.search(rf"[（(]\s*{re.escape(table)}\s*[）)]", q_upper)
+        m = paren or re.search(rf"(?<![A-Z0-9_#$]){re.escape(table)}(?![A-Z0-9_#$])", q_upper)
+        if m and get_live_table_column_names(table) != set():
+            priority = 0 if paren else 1
+            hits.append((priority, m.start(), table))
+    hits.sort(key=lambda item: (item[0], item[1], -len(item[2])))
+    out: List[str] = []
+    seen: Set[str] = set()
+    for _priority, _pos, table in hits:
+        if table not in seen:
+            out.append(table)
+            seen.add(table)
+    return out
+
+
+def _explicit_parenthesized_columns(question: str, tables: List[str]) -> List[str]:
+    ids = re.findall(r"\(([A-Z][A-Z0-9_#$]{1,})\)", (question or "").upper())
+    out: List[str] = []
+    seen: Set[str] = set()
+    for ident in ids:
+        if ident in seen:
+            continue
+        if any(_table_has_column(table, ident) for table in tables):
+            out.append(ident)
+            seen.add(ident)
+    return out
+
+
+def _explicit_table_column_pairs(question: str, tables: List[str]) -> List[Tuple[str, str]]:
+    table_set = {t.upper() for t in tables}
+    pairs: List[Tuple[str, str]] = []
+    seen: Set[Tuple[str, str]] = set()
+    for table, column in re.findall(r"([A-Z][A-Z0-9_#$]+)\.([A-Z][A-Z0-9_#$]+)", (question or "").upper()):
+        pair = (table.upper(), column.upper())
+        if pair in seen or pair[0] not in table_set:
+            continue
+        if _table_has_column(pair[0], pair[1]):
+            pairs.append(pair)
+            seen.add(pair)
+    return pairs
+
+
+def _explicit_default_columns(table: str, limit: int = 4) -> List[str]:
+    live = get_live_table_column_names(table)
+    cols: List[str] = []
+    for column in get_table_columns(table).keys():
+        col_u = column.upper()
+        if live is not None and col_u not in live:
+            continue
+        cols.append(col_u)
+        if len(cols) >= limit:
+            break
+    return cols
+
+
+def explicit_structured_sql(
+    question: str,
+    start_date: str,
+    end_date: str,
+    allowed_tables: List[str],
+) -> str:
+    """
+    Deterministic SQL path for explicit enterprise-report questions.
+    It only fires when the user states concrete table/column identifiers
+    and a simple list/group/aggregate/join intent; otherwise it returns
+    an empty string and the normal RAG + LLM path handles the request.
+    """
+    q = question or ""
+    tables = _explicit_tables_in_question(q, allowed_tables)
+    if not tables:
+        return ""
+
+    relation = re.search(
+        r"([A-Z][A-Z0-9_#$]+)\.([A-Z][A-Z0-9_#$]+)\s*=\s*([A-Z][A-Z0-9_#$]+)\.([A-Z][A-Z0-9_#$]+)",
+        q.upper(),
+    )
+
+    if relation:
+        left, left_col, right, right_col = [x.upper() for x in relation.groups()]
+        if left not in tables:
+            tables.insert(0, left)
+        if right not in tables:
+            tables.append(right)
+        if not (
+            get_table_info(left)
+            and get_table_info(right)
+            and _table_has_column(left, left_col)
+            and _table_has_column(right, right_col)
+        ):
+            return ""
+        limit = _explicit_query_limit(q, 5000)
+        join_sql = f"{left} a JOIN {right} b ON a.{left_col} = b.{right_col}"
+
+        if "记录总数" in q or ("COUNT" in q.upper() and "GROUP" not in q.upper()):
+            return f"SELECT COUNT(*) AS CNT FROM (SELECT 1 FROM {join_sql} WHERE ROWNUM <= {limit})"
+
+        if "合计" in q:
+            m = re.search(
+                r"按\s*([A-Z][A-Z0-9_#$]+)\.([A-Z][A-Z0-9_#$]+)\s*分组.*?([A-Z][A-Z0-9_#$]+)\.([A-Z][A-Z0-9_#$]+).*?合计",
+                q.upper(),
+            )
+            if m:
+                g_table, g_col, n_table, n_col = [x.upper() for x in m.groups()]
+                if {g_table, n_table}.issubset({left, right}) and _table_has_column(g_table, g_col) and _table_has_column(n_table, n_col):
+                    g_alias = "a" if g_table == left else "b"
+                    n_alias = "a" if n_table == left else "b"
+                    return (
+                        f"SELECT GROUP_VALUE, SUM(NUM_VALUE) AS SUM_VALUE FROM ("
+                        f"SELECT {g_alias}.{g_col} AS GROUP_VALUE, {n_alias}.{n_col} AS NUM_VALUE "
+                        f"FROM {join_sql} WHERE {g_alias}.{g_col} IS NOT NULL "
+                        f"AND {n_alias}.{n_col} IS NOT NULL AND ROWNUM <= {limit}) "
+                        f"GROUP BY GROUP_VALUE ORDER BY SUM_VALUE DESC, GROUP_VALUE"
+                    )
+
+        if "分组" in q and ("记录数" in q or "匹配记录数" in q):
+            group_col = ""
+            m = re.search(r"再按\s*([A-Z][A-Z0-9_#$]+)\s*的.*?\(([A-Z][A-Z0-9_#$]+)\)\s*分组", q.upper())
+            if m and m.group(1).upper() in {left, right}:
+                candidate_table, candidate_col = m.group(1).upper(), m.group(2).upper()
+                if _table_has_column(candidate_table, candidate_col):
+                    group_col = candidate_col
+                    group_alias = "a" if candidate_table == left else "b"
+                else:
+                    group_alias = "a"
+            else:
+                paren_cols = [c for c in _explicit_parenthesized_columns(q, [left]) if c != left_col]
+                group_col = paren_cols[0] if paren_cols else ""
+                group_alias = "a"
+            if group_col and _table_has_column(left if group_alias == "a" else right, group_col):
+                return (
+                    f"SELECT GROUP_VALUE, COUNT(*) AS CNT FROM ("
+                    f"SELECT {group_alias}.{group_col} AS GROUP_VALUE FROM {join_sql} "
+                    f"WHERE {group_alias}.{group_col} IS NOT NULL AND ROWNUM <= {limit}) "
+                    f"GROUP BY GROUP_VALUE ORDER BY CNT DESC, GROUP_VALUE"
+                )
+
+        if "返回" in q:
+            ret_seg = q.upper().split("返回", 1)[-1]
+            pairs = [
+                pair for pair in _explicit_table_column_pairs(ret_seg, [left, right])
+                if pair not in {(left, left_col), (right, right_col)}
+            ]
+            if len(pairs) >= 2:
+                selects = []
+                for idx, (table, column) in enumerate(pairs[:6], start=1):
+                    alias = "a" if table == left else "b"
+                    label = "LEFT_VALUE" if idx == 1 else "RIGHT_VALUE" if idx == 2 else f"VALUE_{idx}"
+                    selects.append(f"{alias}.{column} AS {label}")
+                row_limit = _explicit_query_limit(q, 10)
+                return f"SELECT {', '.join(selects)} FROM {join_sql} WHERE ROWNUM <= {row_limit}"
+
+        return ""
+
+    table = tables[0]
+    cols = _explicit_parenthesized_columns(q, [table])
+    limit = _explicit_query_limit(q, 10)
+
+    if "分组" in q and "记录数" in q and cols:
+        col = cols[0]
+        return (
+            f"SELECT {col} AS GROUP_VALUE, COUNT(*) AS CNT "
+            f"FROM (SELECT {col} FROM {table} WHERE {col} IS NOT NULL AND ROWNUM <= 5000) "
+            f"GROUP BY {col} ORDER BY CNT DESC, GROUP_VALUE"
+        )
+
+    if all(word in q for word in ["合计", "平均"]) and cols:
+        col = cols[0]
+        return (
+            f"SELECT SUM({col}) AS SUM_VALUE, AVG({col}) AS AVG_VALUE, "
+            f"MIN({col}) AS MIN_VALUE, MAX({col}) AS MAX_VALUE "
+            f"FROM (SELECT {col} FROM {table} WHERE {col} IS NOT NULL AND ROWNUM <= 5000)"
+        )
+
+    if ("最早日期" in q or "最晚日期" in q) and cols:
+        col = cols[0]
+        return (
+            f"SELECT MIN({col}) AS MIN_DATE, MAX({col}) AS MAX_DATE, COUNT(*) AS CNT "
+            f"FROM (SELECT {col} FROM {table} WHERE {col} IS NOT NULL AND ROWNUM <= 5000)"
+        )
+
+    if "返回" in q or "查询" in q:
+        select_cols = cols or _explicit_default_columns(table, 4)
+        if not select_cols:
+            return ""
+        return f"SELECT {', '.join(select_cols[:8])} FROM {table} WHERE ROWNUM <= {limit}"
+
+    return ""
+
+
+def _schema_only_fallback_sql(
+    question: str,
+    start_date: str,
+    end_date: str,
+    allowed_tables: List[str],
+    join_hint: str,
+    max_select_cols: int = 10,
+) -> str:
+    tables = [
+        t.upper()
+        for t in allowed_tables
+        if get_table_info(t) and get_live_table_column_names(t) != set()
+    ]
+    if not tables:
+        return ""
+
+    base = next((t for t in tables if not is_code_table(t)), tables[0])
+    terms = _fallback_query_terms(question)
+    scored_cols: List[Tuple[float, str, str, str]] = []
+
+    for table in tables:
+        live = get_live_table_column_names(table)
+        for column, meta in get_table_columns(table).items():
+            col_u = column.upper()
+            if live is not None and col_u not in live:
+                continue
+            cn = str(meta.get("cn") or "")
+            usage = str(meta.get("usage") or meta.get("full_description") or "")
+            haystack = f"{table} {col_u} {cn} {usage}".lower()
+            score = 0.0
+            if col_u.lower() in (question or "").lower():
+                score += 8.0
+            if cn and cn in (question or ""):
+                score += 10.0
+            score += sum(0.35 for term in terms if len(term) >= 2 and term in haystack)
+            if score > 0:
+                scored_cols.append((score, table, col_u, cn or col_u))
+
+    scored_cols.sort(key=lambda item: item[0], reverse=True)
+    selected_cols = scored_cols[:max_select_cols]
+    needed_tables = {base}
+    needed_tables.update(table for _score, table, _column, _label in selected_cols)
+
+    relations: List[Tuple[str, str, str, str]] = []
+    for match in re.finditer(
+        r"([A-Z0-9_#$]+)\.([A-Z0-9_#$]+)\s*=\s*([A-Z0-9_#$]+)\.([A-Z0-9_#$]+)",
+        join_hint or "",
+        flags=re.I,
+    ):
+        relations.append(tuple(x.upper() for x in match.groups()))
+    for rel in getattr(SCHEMA_INDEX, "rel_entries", []):
+        left = str(rel.get("left") or "").upper()
+        right = str(rel.get("right") or "").upper()
+        left_col = str(rel.get("column") or "").upper()
+        right_col = str(rel.get("right_column") or rel.get("column") or "").upper()
+        if left and right and left_col and right_col:
+            relations.append((left, left_col, right, right_col))
+
+    aliases = {base: "a"}
+    joined = {base}
+    from_sql = f"{base} a"
+    alias_names = list("bcdefghijklmnopqrstuvwxyz")
+    changed = True
+    while changed:
+        changed = False
+        for left, left_col, right, right_col in relations:
+            if left not in tables or right not in tables:
+                continue
+            if not _table_has_column(left, left_col) or not _table_has_column(right, right_col):
+                continue
+            if left in joined and right in needed_tables and right not in joined:
+                alias = alias_names[len(aliases) - 1]
+                aliases[right] = alias
+                from_sql += f" LEFT JOIN {right} {alias} ON {aliases[left]}.{left_col} = {alias}.{right_col}"
+                joined.add(right)
+                changed = True
+            elif right in joined and left in needed_tables and left not in joined:
+                alias = alias_names[len(aliases) - 1]
+                aliases[left] = alias
+                from_sql += f" LEFT JOIN {left} {alias} ON {aliases[right]}.{right_col} = {alias}.{left_col}"
+                joined.add(left)
+                changed = True
+
+    select_parts: List[str] = []
+    covered_labels: Set[str] = set()
+
+    alias_counts: Dict[str, int] = defaultdict(int)
+
+    def unique_label(label: str) -> str:
+        label = (label or "COL").strip() or "COL"
+        alias_counts[label] += 1
+        if alias_counts[label] == 1:
+            return label
+        return f"{label}_{alias_counts[label]}"
+
+    for _score, table, column, label in selected_cols:
+        if table not in joined:
+            continue
+        label = unique_label(label)
+        select_parts.append(f'{aliases[table]}.{column} AS "{label}"')
+        covered_labels.add(label)
+    if not select_parts:
+        live = get_live_table_column_names(base)
+        for column, meta in list(get_table_columns(base).items())[:max_select_cols]:
+            col_u = column.upper()
+            if live is not None and col_u not in live:
+                continue
+            label = str(meta.get("cn") or col_u)
+            label = unique_label(label)
+            select_parts.append(f'{aliases[base]}.{col_u} AS "{label}"')
+            covered_labels.add(label)
+            if len(select_parts) >= max_select_cols:
+                break
+
+    for label in _fallback_requested_labels(question):
+        if label not in covered_labels and len(select_parts) < max_select_cols + 4:
+            label = unique_label(label)
+            select_parts.append(f'NULL AS "{label}"')
+            covered_labels.add(label)
+
+    date_col = ""
+    for preferred in ["REG_DATE", "FEE_DATE", "LAB_DATE", "NOTE_DATE", "CREATE_DATE"]:
+        for table in joined:
+            if _table_has_column(table, preferred):
+                date_col = f"{aliases[table]}.{preferred}"
+                break
+        if date_col:
+            break
+
+    where_sql = ""
+    if date_col and re.search(r"\d{4}-\d{2}-\d{2}|日期|期间|至", question or ""):
+        where_sql = (
+            f" WHERE {date_col} >= TO_DATE('{start_date}','YYYY-MM-DD') "
+            f"AND {date_col} <= TO_DATE('{end_date}','YYYY-MM-DD')"
+        )
+
+    if not select_parts:
+        return ""
+    return "SELECT " + ", ".join(select_parts) + " FROM " + from_sql + where_sql
 
 
 def _final_repair(
@@ -1120,14 +1790,48 @@ def _final_repair(
 
 直接输出修复后的SQL："""
 
+    def schema_fallback(reason: str) -> str:
+        explicit_sql = explicit_structured_sql(
+            question=question,
+            start_date=start_date,
+            end_date=end_date,
+            allowed_tables=allowed_tables,
+        )
+        if explicit_sql:
+            print(f"  [fallback] {reason}: using explicit structured SQL: {explicit_sql[:120]}...")
+            return explicit_sql
+        fallback_sql = _schema_only_fallback_sql(
+            question=question,
+            start_date=start_date,
+            end_date=end_date,
+            allowed_tables=allowed_tables,
+            join_hint=join_hint,
+        )
+        if fallback_sql:
+            print(f"  [fallback] {reason}: {fallback_sql[:120]}...")
+        return fallback_sql
+
     try:
         txt = ollama_chat(prompt, temperature=0.3, max_tokens=2048, timeout=180)
         fixed_sql = extract_sql(txt)
         if not fixed_sql:
             print(f"  ⚠️ 最终修复 LLM 未返回 SQL")
-            return last_sql
+            fixed_sql = schema_fallback("LLM no SQL, using Schema-only SQL")
+            if not fixed_sql:
+                return last_sql
 
         print(f"  📄 最终修复 SQL: {fixed_sql[:120]}...")
+
+        is_valid_sql, validation_error = validate_sql_against_dictionary(fixed_sql, allowed_tables)
+        if not is_valid_sql:
+            print(f"  ❌ 最终修复 Schema 校验失败: {validation_error}")
+            fixed_sql = schema_fallback("schema validation failed, using Schema-only SQL")
+            if not fixed_sql:
+                return last_sql
+            is_valid_sql, validation_error = validate_sql_against_dictionary(fixed_sql, allowed_tables)
+            if not is_valid_sql:
+                print(f"  ❌ Schema-only SQL 校验失败: {validation_error}")
+                return last_sql
 
         # 验证修复后的 SQL
         try:
@@ -1141,6 +1845,9 @@ def _final_repair(
         except Exception as e:
             conn.close() if 'conn' in dir() else None
             print(f"  ❌ 最终修复 SQL 仍有错误: {str(e)[:200]}")
+            fallback_sql = schema_fallback("execution failed, using Schema-only SQL")
+            if fallback_sql and fallback_sql != fixed_sql:
+                return fallback_sql
             print(f"  ↩️ 返回最终修复后的 SQL（供用户参考）")
             return fixed_sql  # 即使执行失败，也返回修复后的版本（比原始更好）
     except Exception as e:
@@ -1174,6 +1881,25 @@ def generate_with_repair(
     seen_sqls: Set[str] = set()
     consecutive_duplicates = 0
     banned_tables: Set[str] = set()  # ★ 新增：记录确认不存在的表
+
+    explicit_sql = explicit_structured_sql(
+        question=question,
+        start_date=start_date,
+        end_date=end_date,
+        allowed_tables=allowed_tables,
+    )
+    if explicit_sql:
+        try:
+            conn = get_conn_from_session()
+            cur = conn.cursor()
+            cur.execute(f"SELECT * FROM ({explicit_sql}) WHERE ROWNUM <= 1")
+            cur.fetchall()
+            conn.close()
+            print(f"  [explicit-template] SQL execution probe succeeded: {explicit_sql[:120]}...")
+            return explicit_sql
+        except Exception as e:
+            conn.close() if 'conn' in dir() else None
+            print(f"  [explicit-template] skipped after probe failure: {str(e)[:160]}")
 
     for i in range(rounds):
         print(f"\n🔄 第 {i+1}/{rounds} 轮生成")
@@ -1258,6 +1984,16 @@ def generate_with_repair(
         seen_sqls.add(sql)
         last_sql = sql
         print(f"  📄 SQL: {sql[:120]}...")
+
+        is_valid_sql, validation_error = validate_sql_against_dictionary(sql, allowed_tables)
+        if not is_valid_sql:
+            print(f"  ❌ Schema 校验失败: {validation_error}")
+            history.append({
+                "round": i + 1,
+                "sql":   sql,
+                "error": f"Schema validation failed before execution: {validation_error}"
+            })
+            continue
 
         try:
             conn = get_conn_from_session()
@@ -1943,6 +2679,7 @@ def api_ask_multi():
         # Step 3: 构建 Schema 上下文
         print(f"\n🔎 Step 3: 构建 Schema 上下文，涉及表: {candidates}")
         schema_ctx = schema_text_for_tables(candidates)
+        schema_ctx += schema_kg_context_for_prompt(retrieve)
         print(f"  Schema 长度: {len(schema_ctx)} 字符")
 
         # ★ 修改：用 join_hints_text_for_tables（只传 candidates，函数内部查 SCHEMA_INDEX）
@@ -1972,6 +2709,7 @@ def api_ask_multi():
             merged     = merged[:16]
             candidates = merged
             schema_ctx = schema_text_for_tables(candidates)
+            schema_ctx += schema_kg_context_for_prompt(retrieve)
             # ★ 合并后重新生成 JOIN 提示（候选表变了）
             join_hint  = join_hints_text_for_tables(candidates)
             print(f"  合并后最终候选表: {candidates}")
@@ -2060,6 +2798,9 @@ def _debug_retrieve(retrieve: Dict[str, Any]) -> Dict[str, Any]:
         "tables":    top(retrieve.get("tables_hits", []),  6),
         "columns":   top(retrieve.get("cols_hits",   []), 10),
         "relations": top(retrieve.get("rels_hits",   []), 10),
+        "rag_backend": retrieve.get("rag_backend", "unknown"),
+        "rag_context_chars": len(retrieve.get("rag_context", "") or ""),
+        "rag_error": retrieve.get("rag_error", ""),
     }
 
 
@@ -2270,17 +3011,27 @@ def api_health():
     except Exception:
         pass
 
+    fallback_index = getattr(SCHEMA_INDEX, "fallback_index", SCHEMA_INDEX)
+    table_entries = getattr(fallback_index, "table_entries", [])
+    col_entries = getattr(fallback_index, "col_entries", [])
+    rel_entries = getattr(SCHEMA_INDEX, "rel_entries", getattr(fallback_index, "rel_entries", []))
+    faiss_index = getattr(fallback_index, "table_index", None)
+
     return jsonify({
         "status":        "ok",
         "main_tables":   len(dd.get("main_tables", {})),
         "code_tables":   len(dd.get("code_tables", {})),
         "code_map_keys": len(CODE_MAP),
-        "faiss_built":   SCHEMA_INDEX.table_index is not None,
-        "faiss_tables":  len(SCHEMA_INDEX.table_entries),
-        "faiss_cols":    len(SCHEMA_INDEX.col_entries),
-        "faiss_rels":    len(SCHEMA_INDEX.rel_entries),
+        "rag_backend":   getattr(SCHEMA_INDEX, "backend_name", "unknown"),
+        "rag_error":     getattr(SCHEMA_INDEX, "last_error", ""),
+        "faiss_built":   faiss_index is not None,
+        "faiss_tables":  len(table_entries),
+        "faiss_cols":    len(col_entries),
+        "faiss_rels":    len(rel_entries),
         "ollama_url":    OLLAMA_BASE_URL,
         "default_model": OLLAMA_SQL_MODEL,
+        "embedding_model": OLLAMA_EMBEDDING_MODEL,
+        "strict_qwen3_vl_only": STRICT_QWEN3_VL_ONLY,
         "gpu_available": gpu_available,
         "cache_size":    len(_embedding_cache),
         "performance": {
