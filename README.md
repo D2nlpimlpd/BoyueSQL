@@ -1,10 +1,10 @@
-# CoordSQL / BoyueSQL
+# BoyueSQL
 
 Enterprise natural-language-to-SQL backend for large Oracle schemas, powered by
 a customized RagAnything/LightRAG schema knowledge graph and a local
 `qwen3-vl:8b` model.
 
-CoordSQL, named BoyueSQL in the current paper draft, targets production
+BoyueSQL targets production
 enterprise databases where the schema is large, domain terminology is highly
 specialized, and generated SQL must obey deployment-specific dialect rules. The
 current backend is designed for an Oracle 11g health-examination database with
@@ -30,8 +30,8 @@ in `semantic_50_benchmark.json`.
 
 | System | Model | Cases | Execution | Result exact match | Semantic pass |
 |---|---|---:|---:|---:|---:|
-| CoordSQL with final repair | `qwen3-vl:8b` | 50 | 100.00% | 100.00% | 100.00% |
-| CoordSQL without final repair | `qwen3-vl:8b` | 50 | 100.00% | 100.00% | 100.00% |
+| BoyueSQL with final repair | `qwen3-vl:8b` | 50 | 100.00% | 100.00% | 100.00% |
+| BoyueSQL without final repair | `qwen3-vl:8b` | 50 | 100.00% | 100.00% | 100.00% |
 | Schema-only executable fallback | `qwen3-vl:8b` | 50 | 100.00% | 0.00% | 0.00% |
 | DIN-SQL-style prompt baseline | `qwen2.5-coder:7b` | 50 | 42.00% | 14.00% | 14.00% |
 | Direct prompt baseline | `qwen2.5-coder:7b` | 50 | 28.00% | 6.00% | 6.00% |
